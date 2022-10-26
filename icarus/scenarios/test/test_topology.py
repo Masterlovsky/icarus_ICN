@@ -43,3 +43,24 @@ def test_mesh():
 def test_rocketfuel():
     t = topology.topology_rocketfuel_latency(1221, 0.1, 20)
     assert len(t.receivers()) == len(t.graph["icr_candidates"])
+
+def test_seanrs_simple():
+    t = topology.topology_seanrs_simple()
+    assert 3 == len(t.graph["icr_candidates"])
+    assert 3 == len(t.sources())
+    assert 4 == len(t.receivers())
+    assert 12 == len(t.nodes()) 
+    for s in t.switches():
+        print(s, t.node[s]["stack"][1]["as"])
+
+def main():
+    test_tree()
+    test_path()
+    test_ring()
+    test_mesh()
+    test_rocketfuel()
+    test_seanrs_simple()
+
+if __name__ == '__main__':
+    # run all tests
+    main()

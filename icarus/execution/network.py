@@ -12,6 +12,7 @@ about the network status by calling methods of the `NetworkView` instance.
 The `NetworkController` is also responsible to notify a `DataCollectorProxy`
 of all relevant events.
 """
+from collections import defaultdict
 import logging
 
 import networkx as nx
@@ -110,6 +111,21 @@ class NetworkView:
             source is unavailable
         """
         return self.model.content_source.get(k, None)
+
+    def get_access_switch(self, v):
+        """
+        Return the access switch to which a node is connected.
+        ---- Only used in SEANet topology. ----
+        """
+        topology = self.topology()
+        if v not in topology.nodes():
+            return None
+        stack_name, stack_props = fnss.get_stack(topology, v)
+        if stack_name == "receiver":
+            if "sw" in stack_props:
+                return stack_props["sw"]
+        # If the node is not a receiver, alert the user
+        logger.warning("Node %s is not a receiver or does not have attribute 'sw'!", v)
 
     def shortest_path(self, s, t):
         """Return the shortest path from *s* to *t*
@@ -850,3 +866,30 @@ class NetworkController:
         """
         if node in self.model.local_cache:
             return self.model.local_cache[node].put(self.session["content"])
+
+
+# A ICN-SEANet NETWORK MODEL CLASS extent NetworkModel
+class SEANRSModel(NetworkModel):
+    """
+    ICN-SEANet Name Resolution System Network Model
+
+    This class extends the NetworkModel class to add some new features in SEANet INNRS
+    """
+    def __init__(self, topology, cache_policy, shortest_path=None):
+        super().__init__(topology, cache_policy, shortest_path)
+        # controllers of global specific name space
+        # CONTROLLER[as_id][ctrl_id] = {content: node}
+        self.sdncontrollers = defaultdict(dict)  
+        # MCFS(Marked Cuckoo Filters) of global specific name space
+        # MCFS[BGN_node] = MCF()
+        self.MCFS = {}
+        # access-switches of receivers
+        # todo: Temporary set one receiver only has one access-switch, but maybe not.
+        self.access_switches = {}
+        # as number of each node
+        # as_num[node] = as_id
+        self.as_num = {}
+        # BGN node of each as
+        # bgn_nodes[as_id] = BGN_node
+        self.bgn_nodes = defaultdict(set)
+    

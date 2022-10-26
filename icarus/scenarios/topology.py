@@ -22,6 +22,7 @@ from icarus.registry import register_topology_factory
 
 __all__ = [
     "IcnTopology",
+    "SEANRS_Topology",
     "topology_tree",
     "topology_path",
     "topology_ring",
@@ -31,6 +32,7 @@ __all__ = [
     "topology_wide",
     "topology_garr",
     "topology_rocketfuel_latency",
+    "topology_seanrs_simple"
 ]
 
 
@@ -100,6 +102,30 @@ class IcnTopology(fnss.Topology):
             if "stack" in self.node[v] and self.node[v]["stack"][0] == "receiver"
         }
 
+
+class SEANRS_Topology(IcnTopology):
+    """
+    Specially for SEANet In-network-resolution topology
+    """
+    def switches(self):
+        """
+        Return a set of switches
+        """
+        return {
+            v
+            for v in self
+            if "stack" in self.node[v] and self.node[v]["stack"][0] == "switch"
+        }
+    
+    def bgns(self):
+        """
+        Return a set of bgns
+        """
+        return {
+            v
+            for v in self
+            if "stack" in self.node[v] and self.node[v]["stack"][0] == "bgn"
+        }
 
 def largest_connected_component_subgraph(topology):
     """Returns the largst connected component subgraph
@@ -844,3 +870,56 @@ def topology_rocketfuel_latency(
     for v in routers:
         fnss.add_stack(topology, v, "router")
     return IcnTopology(topology)
+
+
+@register_topology_factory("SEANRS_SIMPLE")
+def topology_seanrs_simple() -> SEANRS_Topology:
+    """Create a simple topology for SEANRS
+
+    Parameters
+    ----------
+    as_num : int
+        Number of ASes
+    ctrl_num : int
+        Number of controllers
+    receiver_per_c : int
+        Number of receivers per controller
+    source_per_c : int
+        Number of sources per controller
+    """
+    # Topology sketch
+    #        10 --------- 11
+    #       /  \           \
+    #     7 ---- 8          9
+    #   / | \   /  \       /  \
+    # 0  1  2  3    4    5    6
+    topology = SEANRS_Topology()
+    # add nodes
+    topology.add_nodes_from(range(12))
+    # add edges
+    topology.add_edges_from([(1, 7), (2, 7), (7, 8), (7, 10),
+                            (10, 8), (8, 3), (8, 4), (10, 11), (11, 9), (9, 5), (9, 6)])
+    # set 7-9as acc-switches
+    acc_sw = [7, 8, 9]
+    topology.graph["icr_candidates"] = set(acc_sw)
+    # set 0, 1,3,5 as receivers
+    receivers = [0, 1, 3, 5]
+    # set 2,4,6 as sources
+    sources = [2, 4, 6]
+    # add stacks
+    for v in sources:
+        fnss.add_stack(topology, v, "source")
+
+    fnss.add_stack(topology, 0, "receiver", {"as": 1, "sw": 7})
+    fnss.add_stack(topology, 1, "receiver", {"as": 1, "sw": 7})
+    fnss.add_stack(topology, 3, "receiver", {"as": 1, "sw": 8})
+    fnss.add_stack(topology, 5, "receiver", {"as": 2, "sw": 9})
+
+    fnss.add_stack(topology, 7, "switch", {"as": 1, "ctrl": 0})
+    fnss.add_stack(topology, 8, "switch", {"as": 1, "ctrl": 1})
+    fnss.add_stack(topology, 9, "switch", {"as": 2, "ctrl": 0})
+
+    fnss.add_stack(topology, 10, "bgn", {"as": 1})
+    fnss.add_stack(topology, 11, "bgn", {"as": 2})
+
+    return topology

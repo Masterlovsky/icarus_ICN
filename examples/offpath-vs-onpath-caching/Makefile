@@ -15,7 +15,7 @@ run: check_installed
 
 plot: check_installed
 	@echo "Plot results..."
-	python plotresults.py --results $(RESULTS_FILE) --output $(PLOTS_DIR) $(CONFIG_FILE)
+	python3 plotresults.py --results $(RESULTS_FILE) --output $(PLOTS_DIR) $(CONFIG_FILE)
 
 clean:
 	rm -rf $(RESULTS_FILE) $(PLOTS_DIR)
