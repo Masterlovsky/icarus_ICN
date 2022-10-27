@@ -620,6 +620,7 @@ class PacketInCollector(DataCollector):
         self.packet_in_count = 0
         self.cdf = cdf
         self.sess_count = 0
+        self.frequency = collections.Counter()
         if cdf:
             self.packet_in_data = collections.deque()
 
@@ -628,9 +629,12 @@ class PacketInCollector(DataCollector):
         self.sess_count += 1
         self.sess_packet_in_count = 0
 
-    @inheritdoc(DataCollector)
-    def packet_in(self):
+    def packet_in(self, content):
+        '''
+        Statistics the frequency of packetin request.
+        '''
         self.sess_packet_in_count += 1
+        self.frequency[content] += 1
 
     @inheritdoc(DataCollector)
     def end_session(self, success=True):
@@ -646,6 +650,7 @@ class PacketInCollector(DataCollector):
             {
                 "PACKET_IN_COUNT_TOTAL": self.packet_in_count,
                 "PACKET_IN_COUNT_MEAN": self.packet_in_count / self.sess_count,
+                "PACKET_IN_COUNT_FREQUENCY(top5)": self.frequency.most_common(5),
             }
         )
         return results

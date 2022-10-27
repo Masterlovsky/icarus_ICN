@@ -21,6 +21,7 @@ import fnss
 from icarus.registry import CACHE_POLICY
 from icarus.util import iround, path_links
 from icarus.cuckoo.filter import *
+from icarus.uhashring import HashRing
 
 __all__ = ["NetworkModel", "NetworkView", "NetworkController"]
 
@@ -648,6 +649,19 @@ class NetworkController:
         if self.collector is not None and self.session["log"]:
             self.collector.content_hop(u, v, main_path)
 
+    def packet_in(self, node, content):
+        """Instruct the controller to process a packet in event.
+
+        Parameters
+        ----------
+        node : any hashable type
+            The node that received the packet
+        content : any hashable type
+            The content identifier of the packet
+        """
+        if self.collector is not None and self.session["log"]:
+            self.collector.packet_in(node, content)
+
     def put_content(self, node):
         """Store content in the specified node.
 
@@ -960,6 +974,8 @@ class SEANRSModel(NetworkModel):
         # MCFS(Marked Cuckoo Filters) of global specific name space
         # MCFS[BGN_node] = MCF()
         self.MCFS = {}
+        # consistent hash ring of bgns
+        self.conhash = HashRing(hash_fn=mmh3.hash)
         # access-switches of receivers
         # todo: Temporary set one receiver only has one access-switch, but maybe not.
         self.access_switches = {}
@@ -969,12 +985,14 @@ class SEANRSModel(NetworkModel):
         self.ctrl_num = {}
         # BGN node of each as, bgn_nodes[as_id] = BGN_node
         self.bgn_nodes = defaultdict(set)
+
         for node in topology.nodes():
             stack_name, stack_props = fnss.get_stack(topology, node)
             self.as_num[node] = stack_props['asn']
             if stack_name == "receiver":
                 self.access_switches[node] = topology.node[stack_props["sw"]]
             elif stack_name == "bgn":
+                self.conhash.add_node(node, conf=stack_props)
                 self.bgn_nodes[stack_props['asn']].add(node)
                 #? set MDCF of each BGN node, capacity default to 10000
                 self.MCFS[node] = ScalableCuckooFilter(10000, 0.001, class_type=MarkedCuckooFilter)
@@ -982,8 +1000,28 @@ class SEANRSModel(NetworkModel):
                 self.ctrl_num[node] = stack_props["ctrl"]
             elif stack_name == "source":
                 self.ctrl_num[node] = stack_props["ctrl"]
-                # register content to sdncontroller
+                #! register content to sdncontroller
                 for content in stack_props["contents"]:
                     self.sdncontrollers[stack_props['asn']][stack_props['ctrl']][content] = node
             else:
                 logger.warning("[SEANRS] Unknown stack name: %s", stack_name)
+        
+        #! register content to MDCF of BGN node
+        for node in self.source_node:
+            asn = self.as_num[node]
+            for content in self.source_node[node]:
+                #* ----- intra-domain -----
+                for bgn_node in self.bgn_nodes[asn]:
+                    mcf = self.MCFS[bgn_node]
+                    if self.ctrl_num[node]:
+                        mask = mcf.encode_mask("bit", self.ctrl_num[node])
+                        mcf.insert(content, mask)
+                    else:
+                        logger.warning("[SEANRS] No controller number of source node: %s", node)
+                #* ----- inter-domain ------
+                # consistent Hashing content to a bgn
+                ibgn = self.conhash.get_node(content)
+                # register to inter-domain bgn 
+                mcf = self.MCFS[ibgn]
+                mask = mcf.encode_mask("int", self.as_num[node])
+                mcf.insert(content, mask)

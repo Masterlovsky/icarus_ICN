@@ -7,7 +7,7 @@ if __name__ == '__main__':
     check_count = 0
     for i in range(10000):
         try:
-            cuckoo.insert(str(i))
+            cuckoo.insert(str(i), mask="0"*15+"1"+"0"*32)
             succ_count += 1
         except Exception as e:
             print(e)

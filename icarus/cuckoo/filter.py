@@ -484,7 +484,7 @@ class BCuckooFilter(CuckooTemplate):
         # and return the one from the bucket
         return swap_out
 
-    def insert(self, item):
+    def insert(self, item, **kwargs):
         """
         Insert an into the filter, throw an exception if the filter is full and
         the insertion fails.
@@ -649,11 +649,14 @@ class MarkedCuckooFilter(CuckooTemplate):
         # Empty the bit array
         self.buckets.setall(False)
 
-    def insert(self, item):
+    def insert(self, item, **kargs):
         """
         Insert an into the filter, throw an exception if the filter is full and
         the insertion fails.
         """
+        if "mask" in kargs:
+            mask = kargs["mask"]
+            return self.insert_m(item, mask)
         return self.insert_m(item, "0" * (self.bit_tag_len + self.int_tag_len))
 
     def insert_m(self, item, mask: str):
@@ -1000,6 +1003,7 @@ class ScalableCuckooFilter(object):
 
         class_type : The class type of the filter to use.  Defaults to CuckooFilter.
         """
+        self.class_type = class_type
         # Naive approached #1: use multiple Cuckoo filters with different capacities
         self.filters: List[class_type] = []
 
@@ -1024,10 +1028,12 @@ class ScalableCuckooFilter(object):
         """
         return self.filters[0].get_fingerprint_size()
 
-    def insert(self, item):
+    def insert(self, item, **kargs):
         """
         Insert an into the filter, when the filter approaches its capacity,
         increasing it.
+        param item: The item to insert.
+        mask: The mask of the item to insert. (MCF)
         """
         for cuckoo in reversed(self.filters):
             # Do not wait until the capacity exception is raised because it will
@@ -1041,7 +1047,7 @@ class ScalableCuckooFilter(object):
                 # Using this naive approach, items will always be added into
                 # the last or the biggest filter first.  If all filters are
                 # full, new one will be created
-                return cuckoo.insert(item)
+                return cuckoo.insert(item, **kargs)
 
             except CapacityException:
                 # Fail to insert the item
@@ -1057,10 +1063,10 @@ class ScalableCuckooFilter(object):
         max_kicks = last_filter.max_kicks
 
         # Create a new Cuckoo filter with more capacity
-        self.filters.append(CuckooFilter(capacity, error_rate, bucket_size, max_kicks))
+        self.filters.append(self.class_type(capacity, error_rate, bucket_size, max_kicks))
 
         # Add the item into the new and bigger filter
-        return self.filters[-1].insert(item)
+        return self.filters[-1].insert(item, **kargs)
 
     def contains(self, item):
         """

@@ -39,6 +39,6 @@ class SEANRS(Strategy):
         path = self.view.shortest_path(receiver, acc_switch)
         self.controller.start_session(time, receiver, content, log)
         # todo: SEANRS strategy
-
+        
 
         self.controller.end_session()
