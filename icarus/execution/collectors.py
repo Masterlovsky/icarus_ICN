@@ -598,3 +598,54 @@ class DummyCollector(DataCollector):
             Summary of session
         """
         return self.session
+
+
+class PacketInCollector(DataCollector):
+    """
+    ---- Only used in SEANRS ----
+    Collect packetin request numbers to sdn controller.
+    """
+
+    def __init__(self, view, cdf=False):
+        """Constructor
+
+        Parameters
+        ----------
+        view : NetworkView
+            The network view instance
+        output : stream
+            Stream on which debug collector writes
+        """
+        self.view = view
+        self.packet_in_count = 0
+        self.cdf = cdf
+        self.sess_count = 0
+        if cdf:
+            self.packet_in_data = collections.deque()
+
+    @inheritdoc(DataCollector)
+    def start_session(self, timestamp, receiver, content):
+        self.sess_count += 1
+        self.sess_packet_in_count = 0
+
+    @inheritdoc(DataCollector)
+    def packet_in(self):
+        self.sess_packet_in_count += 1
+
+    @inheritdoc(DataCollector)
+    def end_session(self, success=True):
+        if not success:
+            return
+        if self.cdf:
+            self.packet_in_data.append(self.sess_packet_in_count)
+        self.packet_in_count += self.sess_packet_in_count
+
+    @inheritdoc(DataCollector)
+    def results(self):
+        results = Tree(
+            {
+                "PACKET_IN_COUNT_TOTAL": self.packet_in_count,
+                "PACKET_IN_COUNT_MEAN": self.packet_in_count / self.sess_count,
+            }
+        )
+        return results

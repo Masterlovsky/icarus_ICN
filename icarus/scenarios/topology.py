@@ -907,19 +907,21 @@ def topology_seanrs_simple() -> SEANRS_Topology:
     # set 2,4,6 as sources
     sources = [2, 4, 6]
     # add stacks
-    for v in sources:
-        fnss.add_stack(topology, v, "source")
+    
+    fnss.add_stack(topology, 2, "source", {"asn": 1, "ctrl": 0})
+    fnss.add_stack(topology, 4, "source", {"asn": 1, "ctrl": 1})
+    fnss.add_stack(topology, 6, "source", {"asn": 2, "ctrl": 0})
 
-    fnss.add_stack(topology, 0, "receiver", {"as": 1, "sw": 7})
-    fnss.add_stack(topology, 1, "receiver", {"as": 1, "sw": 7})
-    fnss.add_stack(topology, 3, "receiver", {"as": 1, "sw": 8})
-    fnss.add_stack(topology, 5, "receiver", {"as": 2, "sw": 9})
+    fnss.add_stack(topology, 0, "receiver", {"asn": 1, "sw": 7})
+    fnss.add_stack(topology, 1, "receiver", {"asn": 1, "sw": 7})
+    fnss.add_stack(topology, 3, "receiver", {"asn": 1, "sw": 8})
+    fnss.add_stack(topology, 5, "receiver", {"asn": 2, "sw": 9})
 
-    fnss.add_stack(topology, 7, "switch", {"as": 1, "ctrl": 0})
-    fnss.add_stack(topology, 8, "switch", {"as": 1, "ctrl": 1})
-    fnss.add_stack(topology, 9, "switch", {"as": 2, "ctrl": 0})
+    fnss.add_stack(topology, 7, "switch", {"asn": 1, "ctrl": 0})
+    fnss.add_stack(topology, 8, "switch", {"asn": 1, "ctrl": 1})
+    fnss.add_stack(topology, 9, "switch", {"asn": 2, "ctrl": 0})
 
-    fnss.add_stack(topology, 10, "bgn", {"as": 1})
-    fnss.add_stack(topology, 11, "bgn", {"as": 2})
+    fnss.add_stack(topology, 10, "bgn", {"asn": 1})
+    fnss.add_stack(topology, 11, "bgn", {"asn": 2})
 
     return topology

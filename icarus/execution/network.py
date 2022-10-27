@@ -20,6 +20,7 @@ import fnss
 
 from icarus.registry import CACHE_POLICY
 from icarus.util import iround, path_links
+from icarus.cuckoo.filter import *
 
 __all__ = ["NetworkModel", "NetworkView", "NetworkController"]
 
@@ -114,8 +115,8 @@ class NetworkView:
 
     def get_access_switch(self, v):
         """
-        Return the access switch to which a node is connected.
         ---- Only used in SEANet topology. ----
+        Return the access switch to which a node is connected.
         """
         topology = self.topology()
         if v not in topology.nodes():
@@ -126,6 +127,82 @@ class NetworkView:
                 return stack_props["sw"]
         # If the node is not a receiver, alert the user
         logger.warning("Node %s is not a receiver or does not have attribute 'sw'!", v)
+
+    def get_asn(self, v):
+        """Return the ASN of a node
+        ---- Only used in SEANet topology. ----
+        Parameters
+        ----------
+        v : Node
+
+        Returns
+        -------
+        asn : int
+            The ASN of the node
+        """
+        return self.model.as_num[v]
+
+    def get_ctrln(self, v):
+        """Return the controller to which a node is connected.
+        ---- Only used in SEANet topology. ----
+        Parameters
+        ----------
+        v : Node
+
+        Returns
+        -------
+        ctrln : any hashable type
+            The controller to which the node is connected
+        """
+        return self.model.ctrl_num[v]
+
+    def get_bgns_in_as(self, asn):
+        """Return the BGP routers in the given ASN
+        ---- Only used in SEANet topology. ----
+        Parameters
+        ----------
+        asn : int
+            The ASN
+
+        Returns
+        -------
+        bgn : any hashable type
+            The BGP routers set in the given ASN
+        """
+        return self.model.bgn_nodes[asn]
+
+    def get_mcf(self, bgn):
+        """Return the MCF of a BGP router
+        ---- Only used in SEANet topology. ----
+        Parameters
+        ----------
+        bgn : node
+            BGP router
+
+        Returns
+        -------
+        mcf : dict
+            The MCF of the BGP router
+        """
+        return self.model.MCFS[bgn]
+
+    def get_dst_from_controller(self, asn, ctrln, content):
+        """Return the resolve node from the controller
+        ---- Only used in SEANet topology. ----
+        Parameters
+        ----------
+        asn : int
+            The ASN
+        ctrln : int
+            The controller number
+
+        Returns
+        -------
+        node : node of topology
+            The identifier of the destination node
+        """
+        return self.model.sdncontrollers[asn][ctrln][content]
+
 
     def shortest_path(self, s, t):
         """Return the shortest path from *s* to *t*
@@ -886,10 +963,27 @@ class SEANRSModel(NetworkModel):
         # access-switches of receivers
         # todo: Temporary set one receiver only has one access-switch, but maybe not.
         self.access_switches = {}
-        # as number of each node
-        # as_num[node] = as_id
+        # as number of each node, as_num[node] = as_id
         self.as_num = {}
-        # BGN node of each as
-        # bgn_nodes[as_id] = BGN_node
+        # controller number of switch, ctrl_num[node] = ctrl_id
+        self.ctrl_num = {}
+        # BGN node of each as, bgn_nodes[as_id] = BGN_node
         self.bgn_nodes = defaultdict(set)
-    
+        for node in topology.nodes():
+            stack_name, stack_props = fnss.get_stack(topology, node)
+            self.as_num[node] = stack_props['asn']
+            if stack_name == "receiver":
+                self.access_switches[node] = topology.node[stack_props["sw"]]
+            elif stack_name == "bgn":
+                self.bgn_nodes[stack_props['asn']].add(node)
+                #? set MDCF of each BGN node, capacity default to 10000
+                self.MCFS[node] = ScalableCuckooFilter(10000, 0.001, class_type=MarkedCuckooFilter)
+            elif stack_name == "switch":
+                self.ctrl_num[node] = stack_props["ctrl"]
+            elif stack_name == "source":
+                self.ctrl_num[node] = stack_props["ctrl"]
+                # register content to sdncontroller
+                for content in stack_props["contents"]:
+                    self.sdncontrollers[stack_props['asn']][stack_props['ctrl']][content] = node
+            else:
+                logger.warning("[SEANRS] Unknown stack name: %s", stack_name)

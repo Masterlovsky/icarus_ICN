@@ -51,7 +51,7 @@ def test_seanrs_simple():
     assert 4 == len(t.receivers())
     assert 12 == len(t.nodes()) 
     for s in t.switches():
-        print(s, t.node[s]["stack"][1]["as"])
+        print(s, t.node[s]["stack"][1]["asn"])
 
 def main():
     test_tree()
