@@ -15,6 +15,7 @@ of all relevant events.
 from collections import defaultdict
 import logging
 
+import mmh3
 import networkx as nx
 import fnss
 
@@ -71,7 +72,7 @@ class NetworkView:
         model : NetworkModel
             The network model instance
         """
-        if not isinstance(model, NetworkModel):
+        if not (isinstance(model, NetworkModel) or isinstance(model, SEANRSModel)):
             raise ValueError(
                 "The model argument must be an instance of " "NetworkModel"
             )
@@ -157,6 +158,23 @@ class NetworkView:
         """
         return self.model.ctrl_num[v]
 
+    def get_switches_in_ctrl(self, asn, ctrln):
+        """Return the switches in the given controller
+        ---- Only used in SEANet topology. ----
+        Parameters
+        ----------
+        asn : int
+            The ASN
+        ctrln : int
+            The controller number
+
+        Returns
+        -------
+        sw : set
+            The switches set in the given controller
+        """
+        return self.model.switches_in_ctrl[asn][ctrln]
+
     def get_bgns_in_as(self, asn):
         """Return the BGP routers in the given ASN
         ---- Only used in SEANet topology. ----
@@ -171,6 +189,19 @@ class NetworkView:
             The BGP routers set in the given ASN
         """
         return self.model.bgn_nodes[asn]
+
+    def get_bgn_conhash(self, content):
+        """Return the conhash of a BGP router
+        ---- Only used in SEANet topology. ----
+        Parameters
+        ----------
+        content: 
+            The content name
+        Returns
+        -------
+            The bgn which is responsible for the content in inter-domain
+        """
+        return self.model.conhash.get_node(content)
 
     def get_mcf(self, bgn):
         """Return the MCF of a BGP router
@@ -196,7 +227,7 @@ class NetworkView:
             The ASN
         ctrln : int
             The controller number
-
+        content : str
         Returns
         -------
         node : node of topology
@@ -597,9 +628,9 @@ class NetworkController:
 
         Parameters
         ----------
-        s : any hashable type
+        u : any hashable type
             Origin node
-        t : any hashable type
+        v : any hashable type
             Destination node
         path : list, optional
             The path to use. If not provided, shortest path is used
@@ -649,18 +680,16 @@ class NetworkController:
         if self.collector is not None and self.session["log"]:
             self.collector.content_hop(u, v, main_path)
 
-    def packet_in(self, node, content):
+    def packet_in(self, content):
         """Instruct the controller to process a packet in event.
 
         Parameters
         ----------
-        node : any hashable type
-            The node that received the packet
         content : any hashable type
             The content identifier of the packet
         """
         if self.collector is not None and self.session["log"]:
-            self.collector.packet_in(node, content)
+            self.collector.packet_in(content)
 
     def put_content(self, node):
         """Store content in the specified node.
@@ -859,7 +888,7 @@ class NetworkController:
         if v in self.model.source_node:
             self.model.removed_sources[v] = self.model.source_node.pop(v)
             for content in self.model.removed_sources[v]:
-                self.model.countent_source.pop(content)
+                self.model.content_source.pop(content)
         if recompute_paths:
             shortest_path = dict(nx.all_pairs_dijkstra_path(self.model.topology))
             self.model.shortest_path = symmetrify_paths(shortest_path)
@@ -886,7 +915,7 @@ class NetworkController:
         if v in self.model.removed_sources:
             self.model.source_node[v] = self.model.removed_sources.pop(v)
             for content in self.model.source_node[v]:
-                self.model.countent_source[content] = v
+                self.model.content_source[content] = v
         if recompute_paths:
             shortest_path = dict(nx.all_pairs_dijkstra_path(self.model.topology))
             self.model.shortest_path = symmetrify_paths(shortest_path)
@@ -895,7 +924,7 @@ class NetworkController:
         """Reserve a fraction of cache as local.
 
         This method reserves a fixed fraction of the cache of each caching node
-        to act as local uncoodinated cache. Methods `get_content` and
+        to act as local uncoordinated cache. Methods `get_content` and
         `put_content` will only operated to the coordinated cache. The reserved
         local cache can be accessed with methods `get_content_local_cache` and
         `put_content_local_cache`.
@@ -969,16 +998,18 @@ class SEANRSModel(NetworkModel):
     def __init__(self, topology, cache_policy, shortest_path=None):
         super().__init__(topology, cache_policy, shortest_path)
         # controllers of global specific name space
-        # CONTROLLER[as_id][ctrl_id] = {content: node}
-        self.sdncontrollers = defaultdict(dict)  
-        # MCFS(Marked Cuckoo Filters) of global specific name space
-        # MCFS[BGN_node] = MCF()
+        # sdncontrollers[as_id][ctrl_id] = {content: node}
+        self.sdncontrollers = defaultdict(lambda: defaultdict(dict))
+        # MCFs(Marked Cuckoo Filters) of global specific name space
+        # MCFs[BGN_node] = MCF()
         self.MCFS = {}
         # consistent hash ring of bgns
         self.conhash = HashRing(hash_fn=mmh3.hash)
-        # access-switches of receivers
+        # access-switch of receiver
         # todo: Temporary set one receiver only has one access-switch, but maybe not.
         self.access_switches = {}
+        # access-switches of controller, switches_in_ctrl[as_id][ctrl_id] = set()
+        self.switches_in_ctrl = defaultdict(lambda: defaultdict(set))
         # as number of each node, as_num[node] = as_id
         self.as_num = {}
         # controller number of switch, ctrl_num[node] = ctrl_id
@@ -994,13 +1025,14 @@ class SEANRSModel(NetworkModel):
             elif stack_name == "bgn":
                 self.conhash.add_node(node, conf=stack_props)
                 self.bgn_nodes[stack_props['asn']].add(node)
-                #? set MDCF of each BGN node, capacity default to 10000
+                #! set MDCF of each BGN node, capacity default to 10000
                 self.MCFS[node] = ScalableCuckooFilter(10000, 0.001, class_type=MarkedCuckooFilter)
             elif stack_name == "switch":
                 self.ctrl_num[node] = stack_props["ctrl"]
+                self.switches_in_ctrl[stack_props['asn']][stack_props["ctrl"]].add(node)
             elif stack_name == "source":
                 self.ctrl_num[node] = stack_props["ctrl"]
-                #! register content to sdncontroller
+                #! register content to sdn controller
                 for content in stack_props["contents"]:
                     self.sdncontrollers[stack_props['asn']][stack_props['ctrl']][content] = node
             else:
@@ -1015,7 +1047,7 @@ class SEANRSModel(NetworkModel):
                     mcf = self.MCFS[bgn_node]
                     if self.ctrl_num[node]:
                         mask = mcf.encode_mask("bit", self.ctrl_num[node])
-                        mcf.insert(content, mask)
+                        mcf.insert(content, mask=mask)
                     else:
                         logger.warning("[SEANRS] No controller number of source node: %s", node)
                 #* ----- inter-domain ------
@@ -1024,4 +1056,4 @@ class SEANRSModel(NetworkModel):
                 # register to inter-domain bgn 
                 mcf = self.MCFS[ibgn]
                 mask = mcf.encode_mask("int", self.as_num[node])
-                mcf.insert(content, mask)
+                mcf.insert(content, mask=mask)

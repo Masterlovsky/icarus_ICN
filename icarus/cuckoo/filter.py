@@ -749,10 +749,13 @@ class MarkedCuckooFilter(CuckooTemplate):
 
         return False
 
-    def delete(self, item):
+    def delete(self, item, **kargs):
         """
         Remove an item from the filter, return false if it does not exist.
         """
+        if "mask" in kargs:
+            mask = kargs["mask"]
+            return self.insert_m(item, mask)
         mask_len = self.bit_tag_len + self.int_tag_len
         return self.delete_m(item, "0" * mask_len)
 
@@ -807,10 +810,11 @@ class MarkedCuckooFilter(CuckooTemplate):
         mask = bitarray(mask)
         if mask[0:self.bit_tag_len].count(True) != 0:
             bit_idx_l = [i for i, b in enumerate(mask[0:self.bit_tag_len]) if b]
-            return "bit", random.choice(bit_idx_l)
+            # todo: if there are more than one bit_idx, return all?
+            return "bit", bit_idx_l
         elif mask[self.bit_tag_len:self.bit_tag_len + self.int_tag_len].count(True) != 0:
-            bit_idx = int(mask[self.bit_tag_len:self.bit_tag_len + self.int_tag_len].to01(), 2)
-            return "int", bit_idx
+            int_idx = int(mask[self.bit_tag_len:self.bit_tag_len + self.int_tag_len].to01(), 2)
+            return "int", [int_idx]
         else:
             raise ValueError("Value get error! The bit block is empty")
 
@@ -1078,14 +1082,40 @@ class ScalableCuckooFilter(object):
 
         return False
 
-    def delete(self, item):
+    def get(self, item):
+        """
+        Check if an item is in the filter, return mask string of the index.
+        *** Only for MCF. ***
+        """
+        for cuckoo in reversed(self.filters):
+            if item in cuckoo:
+                return cuckoo.get(item)
+        return "0" * (cuckoo.bit_tag_len + cuckoo.int_tag_len)
+
+    def encode_mask(self, tag_area, idx):
+        """
+        Get to encode mask in the tag area(bit area or int area) with the idx
+        return mask in bit array format with the length of self.bit_tag_len + self.int_tag_len
+        *** Only for MCF. ***
+        """
+        return self.filters[0].encode_mask(tag_area, idx)
+
+    def decode_mask(self, mask: str):
+        """
+        Get to decode mask in the tag area(bit area or int area)
+        return tag_area and idx
+        *** Only for MCF. ***
+        """
+        return self.filters[0].decode_mask(mask)
+
+    def delete(self, item, **kargs):
         """
         Remove an item from the filter, return false if it does not exist.
         """
         # Using this naive approach, items can be removed from old filters
         # make them under capacity (usable) again
         for cuckoo in reversed(self.filters):
-            if cuckoo.delete(item):
+            if cuckoo.delete(item, **kargs):
                 return True
 
         return False

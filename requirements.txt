@@ -12,3 +12,13 @@ sphinx
 mmh3
 bitarray
 netaddr
+
+# icarus Main
+networkx
+fnss
+numpy
+scipy
+python-dateutil
+Click
+matplotlib
+setuptools

@@ -8,11 +8,12 @@ if __name__ == '__main__':
     for i in range(10000):
         try:
             cuckoo.insert(str(i), mask="0"*15+"1"+"0"*32)
+            # cuckoo.insert(str(i))
             succ_count += 1
         except Exception as e:
             print(e)
-    print(succ_count)
-
+    print("succ_count: ", succ_count)
+    print("cuckoo get(): ", cuckoo.get(str(5358)))
     size = 100000
     for i in range(20000, 20000 + size):
         if cuckoo.contains(str(i)):
