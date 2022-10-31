@@ -15,7 +15,6 @@ from icarus.registry import register_data_collector
 from icarus.tools import cdf
 from icarus.util import Tree, inheritdoc
 
-
 __all__ = [
     "DataCollector",
     "CollectorProxy",
@@ -171,6 +170,7 @@ class CollectorProxy(DataCollector):
         "server_hit",
         "request_hop",
         "content_hop",
+        "packet_in",
         "results",
     )
 
@@ -218,6 +218,10 @@ class CollectorProxy(DataCollector):
     def content_hop(self, u, v, main_path=True):
         for c in self.collectors["content_hop"]:
             c.content_hop(u, v, main_path)
+
+    def packet_in(self, content):
+        for c in self.collectors["packet_in"]:
+            c.packet_in(content)
 
     @inheritdoc(DataCollector)
     def end_session(self, success=True):
@@ -600,6 +604,7 @@ class DummyCollector(DataCollector):
         return self.session
 
 
+@register_data_collector("PACKET_IN")
 class PacketInCollector(DataCollector):
     """
     ---- Only used in SEANRS ----
@@ -613,9 +618,10 @@ class PacketInCollector(DataCollector):
         ----------
         view : NetworkView
             The network view instance
-        output : stream
-            Stream on which debug collector writes
+        cdf : bool, optional
+            If *True*, also collects a cdf of the path stretch
         """
+        self.sess_packet_in_count = 0
         self.view = view
         self.packet_in_count = 0
         self.cdf = cdf
@@ -630,9 +636,9 @@ class PacketInCollector(DataCollector):
         self.sess_packet_in_count = 0
 
     def packet_in(self, content):
-        '''
-        Statistics the frequency of packetin request.
-        '''
+        """
+        Statistics the frequency of packet in request.
+        """
         self.sess_packet_in_count += 1
         self.frequency[content] += 1
 

@@ -7,11 +7,13 @@ and providing them to a strategy instance.
 """
 from icarus.execution import (
     NetworkModel,
+    SEANRSModel,
     NetworkView,
     NetworkController,
     CollectorProxy,
 )
 from icarus.registry import DATA_COLLECTOR, STRATEGY
+from icarus.scenarios import SEANRS_Topology
 
 
 __all__ = ["exec_experiment"]
@@ -48,7 +50,10 @@ def exec_experiment(topology, workload, netconf, strategy, cache_policy, collect
     results : Tree
         A tree with the aggregated simulation results from all collectors
     """
-    model = NetworkModel(topology, cache_policy, **netconf)
+    if isinstance(topology, SEANRS_Topology):
+        model = SEANRSModel(topology, cache_policy, **netconf)
+    else:
+        model = NetworkModel(topology, cache_policy, **netconf)
     view = NetworkView(model)
     controller = NetworkController(model)
 

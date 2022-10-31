@@ -190,7 +190,7 @@ class NetworkView:
         """
         return self.model.bgn_nodes[asn]
 
-    def get_bgn_conhash(self, content):
+    def get_bgn_conhash(self, content: str):
         """Return the conhash of a BGP router
         ---- Only used in SEANet topology. ----
         Parameters
@@ -233,8 +233,9 @@ class NetworkView:
         node : node of topology
             The identifier of the destination node
         """
-        return self.model.sdncontrollers[asn][ctrln][content]
-
+        sdn_controller = self.model.sdncontrollers[asn][ctrln]
+        if content in sdn_controller:
+            return sdn_controller[content]
 
     def shortest_path(self, s, t):
         """Return the shortest path from *s* to *t*
@@ -1045,15 +1046,15 @@ class SEANRSModel(NetworkModel):
                 #* ----- intra-domain -----
                 for bgn_node in self.bgn_nodes[asn]:
                     mcf = self.MCFS[bgn_node]
-                    if self.ctrl_num[node]:
+                    if node in self.ctrl_num:
                         mask = mcf.encode_mask("bit", self.ctrl_num[node])
-                        mcf.insert(content, mask=mask)
+                        mcf.insert(str(content), mask=mask)
                     else:
                         logger.warning("[SEANRS] No controller number of source node: %s", node)
                 #* ----- inter-domain ------
                 # consistent Hashing content to a bgn
-                ibgn = self.conhash.get_node(content)
+                ibgn = self.conhash.get_node(str(content))
                 # register to inter-domain bgn 
                 mcf = self.MCFS[ibgn]
                 mask = mcf.encode_mask("int", self.as_num[node])
-                mcf.insert(content, mask=mask)
+                mcf.insert(str(content), mask=mask)

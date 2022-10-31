@@ -116,7 +116,7 @@ class SEANRS_Topology(IcnTopology):
             for v in self
             if "stack" in self.node[v] and self.node[v]["stack"][0] == "switch"
         }
-    
+
     def bgns(self):
         """
         Return a set of bgns
@@ -897,7 +897,7 @@ def topology_seanrs_simple() -> SEANRS_Topology:
     # add nodes
     topology.add_nodes_from(range(12))
     # add edges
-    topology.add_edges_from([(1, 7), (2, 7), (7, 8), (7, 10),
+    topology.add_edges_from([(0, 7), (1, 7), (2, 7), (7, 8), (7, 10),
                             (10, 8), (8, 3), (8, 4), (10, 11), (11, 9), (9, 5), (9, 6)])
     # set 7-9as acc-switches
     acc_sw = [7, 8, 9]
@@ -906,8 +906,15 @@ def topology_seanrs_simple() -> SEANRS_Topology:
     receivers = [0, 1, 3, 5]
     # set 2,4,6 as sources
     sources = [2, 4, 6]
+
+    # Mark all current links as internal
+    for u, v in topology.edges():
+        topology.adj[u][v]["type"] = "internal"
+    # set weights and delays on all links
+    fnss.set_weights_constant(topology, 1.0)
+    fnss.set_delays_constant(topology, INTERNAL_LINK_DELAY, "ms")
+
     # add stacks
-    
     fnss.add_stack(topology, 2, "source", {"asn": 1, "ctrl": 0})
     fnss.add_stack(topology, 4, "source", {"asn": 1, "ctrl": 1})
     fnss.add_stack(topology, 6, "source", {"asn": 2, "ctrl": 0})

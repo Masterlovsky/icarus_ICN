@@ -1,4 +1,6 @@
 """Implementations of SEANet strategies"""
+import random
+
 from icarus.registry import register_strategy
 from icarus.util import inheritdoc, path_links
 
@@ -10,6 +12,7 @@ __all__ = [
 ]
 
 logger = logging.getLogger("SEANRS-strategy")
+
 
 @register_strategy("SEANRS")
 class SEANRS(Strategy):
@@ -51,8 +54,9 @@ class SEANRS(Strategy):
         # Check whether the content is in the sdn controller
         self.controller.packet_in(content)
         dst_n = self.view.get_dst_from_controller(
-            self.get_asn(sw), self.get_ctrl(sw), content)
+            self.view.get_asn(sw), self.view.get_ctrln(sw), content)
         if dst_n:
+            self.controller.get_content(dst_n)
             # Update the cache of the switch
             if self.view.has_cache(sw):
                 self.controller.put_content(sw)
@@ -88,7 +92,7 @@ class SEANRS(Strategy):
                     nsw = sw
             return nsw
 
-        content = self.controller.session['content']
+        content = str(self.controller.session['content'])
         # check mcf(marked cuckoo filter) of bgn
         mcf = self.view.get_mcf(bgn)
         acc_sw = []  # acc_sw: [{1, 2, 3}, {4, 5, 6}, ...]
@@ -105,7 +109,8 @@ class SEANRS(Strategy):
                 if inter:
                     return
                 # Directly goto the next inter-bgn to resolve the content
-                nearest_sw_list = self.resolve_bgp(idx_l, True)
+                bgn_next = random.choice(list(self.view.get_bgns_in_as(idx_l[0])))
+                nearest_sw_list = self.resolve_bgp(bgn_next, True)
                 if not nearest_sw_list:
                     logger.error('Perhaps false positive happens, No valid access node found in the inter-domain bgn.')
                     # todo: return or hash the content fingerprint to find another bgn?
@@ -127,15 +132,16 @@ class SEANRS(Strategy):
         dst_node = self.resolve_ctrl(acc_switch)
         if dst_node:
             self.controller.forward_request_path(acc_switch, dst_node)
-            #! forward content back to receiver
+            # self.controller.get_content(dst_node)
+            # forward content back to receiver
             self.controller.forward_content_path(dst_node, receiver)
             self.controller.end_session(success=True)
             return
         # if the content is not resolved in the ctrl domain, get the content from the manage-domain
         # get bgn of acc_switch
-        bgns = self.view.get_bgns_in_as(self.get_asn(acc_switch))
-        # todo: choose a bgn from bgns, now choose the first one
-        bgn = bgns[0]
+        bgns: set = self.view.get_bgns_in_as(self.view.get_asn(acc_switch))
+        # todo: choose a bgn from bgns set, now choose the first one
+        bgn = random.choice(list(bgns))
         # route the request to bgn
         self.controller.forward_request_path(acc_switch, bgn)
         # if the content is resolved in the manage-domain, get acc-switch
@@ -145,6 +151,7 @@ class SEANRS(Strategy):
                 self.controller.forward_request_path(bgn, sw)
                 dst_node = self.resolve_ctrl(sw)
                 if dst_node:
+                    # self.controller.get_content(dst_node)
                     self.controller.forward_request_path(sw, dst_node)
                     break
                 # if the content is not resolved in the foreign ctrl domain, false positive happens, route back to bgn
@@ -156,7 +163,7 @@ class SEANRS(Strategy):
             return
 
         # if the content is not resolved in the manage-domain, hash the content fingerprint to find inter-domain bgn
-        inter_bgn = self.view.get_bgn_conhash(content)
+        inter_bgn = self.view.get_bgn_conhash(str(content))
         self.controller.forward_request_path(bgn, inter_bgn)
         nearest_sw_list = self.resolve_bgp(inter_bgn)
         if nearest_sw_list:
