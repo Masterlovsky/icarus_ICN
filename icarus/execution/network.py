@@ -505,7 +505,7 @@ class NetworkModel:
         cache_size = {}
         for node in topology.nodes():
             stack_name, stack_props = fnss.get_stack(topology, node)
-            if stack_name == "router":
+            if stack_name == "router" or stack_name == "switch":
                 if "cache_size" in stack_props:
                     cache_size[node] = stack_props["cache_size"]
             elif stack_name == "source":
@@ -691,6 +691,19 @@ class NetworkController:
         """
         if self.collector is not None and self.session["log"]:
             self.collector.packet_in(content)
+
+    def resolve(self, content, area):
+        """Instruct the controller to resolve a content identifier.
+
+        Parameters
+        ----------
+        content : any hashable type
+            The content identifier to resolve
+        area : any hashable type
+            The area in which the content is being resolved, support: {"ctrl", "ibgn", "ebgn"}
+        """
+        if self.collector is not None and self.session["log"]:
+            self.collector.resolve(content, area)
 
     def put_content(self, node):
         """Store content in the specified node.

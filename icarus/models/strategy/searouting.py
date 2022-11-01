@@ -47,9 +47,10 @@ class SEANRS(Strategy):
             The node(actually ip address) to route the request to
         """
         content = self.controller.session['content']
+        self.controller.resolve(content, "ctrl")
         # Check whether the content is in the cache
         if self.view.has_cache(sw) and self.controller.get_content(sw):
-            # todo: this will be changed to the content_location
+            # todo: this method will be changed to the content_location
             return self.view.content_source(content)
         # Check whether the content is in the sdn controller
         self.controller.packet_in(content)
@@ -93,6 +94,7 @@ class SEANRS(Strategy):
             return nsw
 
         content = str(self.controller.session['content'])
+        self.controller.resolve(content, "ibgn")
         # check mcf(marked cuckoo filter) of bgn
         mcf = self.view.get_mcf(bgn)
         acc_sw = []  # acc_sw: [{1, 2, 3}, {4, 5, 6}, ...]
@@ -165,6 +167,7 @@ class SEANRS(Strategy):
         # if the content is not resolved in the manage-domain, hash the content fingerprint to find inter-domain bgn
         inter_bgn = self.view.get_bgn_conhash(str(content))
         self.controller.forward_request_path(bgn, inter_bgn)
+        self.controller.resolve(content, "ebgn")
         nearest_sw_list = self.resolve_bgp(inter_bgn)
         if nearest_sw_list:
             for sw in nearest_sw_list:

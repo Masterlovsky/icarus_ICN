@@ -1,0 +1,26 @@
+>>> node information: [ Node TYPE{0:receiver, 1:source, 2:access-switch, 3:bgn} ASN CTRL ACCESS ]
+0, 0, 1, None, 7
+1, 0, 1, None, 7
+2, 1, 1, 0, None
+3, 0, 1, None, 8
+4, 1, 1, 1, None
+5, 0, 2, None, 9
+6, 1, 2, 0, None
+7, 2, 1, 0, None
+8, 2, 1, 1, None
+9, 2, 2, 0, None
+10, 3, 1, None, None
+11, 3, 2, None, None
+>>> edge information: [ Node1 Node2 LinkType{0:internal, 1:external} LinkDelay Weight]
+0, 7, 0, 1, 1
+1, 7, 0, 1, 1
+2, 7, 0, 1, 1
+7, 8, 0, 1, 1
+7, 10, 0, 2, 1
+8, 10, 0, 2, 1
+8, 3, 0, 1, 1
+8, 4, 0, 1, 1
+10, 11, 0, 4, 1
+11, 9, 0, 2, 1
+5, 9, 0, 1, 1
+6, 9, 0, 1, 1

@@ -23,6 +23,8 @@ __all__ = [
     "LatencyCollector",
     "PathStretchCollector",
     "DummyCollector",
+    "PacketInCollector",
+    "SEANRS_DUMMY_Collector"
 ]
 
 
@@ -171,6 +173,7 @@ class CollectorProxy(DataCollector):
         "request_hop",
         "content_hop",
         "packet_in",
+        "resolve",
         "results",
     )
 
@@ -222,6 +225,10 @@ class CollectorProxy(DataCollector):
     def packet_in(self, content):
         for c in self.collectors["packet_in"]:
             c.packet_in(content)
+
+    def resolve(self, content, area):
+        for c in self.collectors["resolve"]:
+            c.resolve(content, area)
 
     @inheritdoc(DataCollector)
     def end_session(self, success=True):
@@ -611,7 +618,7 @@ class PacketInCollector(DataCollector):
     Collect packetin request numbers to sdn controller.
     """
 
-    def __init__(self, view, cdf=False):
+    def __init__(self, view, cdf=False, **params):
         """Constructor
 
         Parameters
@@ -621,8 +628,8 @@ class PacketInCollector(DataCollector):
         cdf : bool, optional
             If *True*, also collects a cdf of the path stretch
         """
+        super().__init__(view, **params)
         self.sess_packet_in_count = 0
-        self.view = view
         self.packet_in_count = 0
         self.cdf = cdf
         self.sess_count = 0
@@ -656,7 +663,60 @@ class PacketInCollector(DataCollector):
             {
                 "PACKET_IN_COUNT_TOTAL": self.packet_in_count,
                 "PACKET_IN_COUNT_MEAN": self.packet_in_count / self.sess_count,
-                "PACKET_IN_COUNT_FREQUENCY(top5)": self.frequency.most_common(5),
+                "PACKET_IN_COUNT_FREQUENCY(top5) (content, freq)": self.frequency.most_common(5),
+            }
+        )
+        return results
+
+
+@register_data_collector("SEANRS_DUMMY")
+class SEANRS_DUMMY_Collector(DataCollector):
+    """
+    collect statistic data for SEANRS.
+    """
+
+    def __init__(self, view, **params):
+        """Constructor
+
+        Parameters
+        ----------
+        view : NetworkView
+            The network view instance
+        """
+        super().__init__(view, **params)
+        self.resolve_ctrl = 0
+        self.resolve_ibgn = 0
+        self.resolve_ebgn = 0
+        self.total_request = {}  # content: count
+
+    @inheritdoc(DataCollector)
+    def start_session(self, timestamp, receiver, content):
+        self.total_request[content] = self.total_request.get(content, 0) + 1
+
+    def resolve(self, content, area: str):
+        """
+        Calculate the specific location where statistics content is parsed
+        """
+        if area == "ctrl":
+            self.resolve_ctrl += 1
+        elif area == "ibgn":
+            self.resolve_ibgn += 1
+        elif area == "ebgn":
+            self.resolve_ebgn += 1
+
+    @inheritdoc(DataCollector)
+    def end_session(self, success=True):
+        if not success:
+            return
+
+    @inheritdoc(DataCollector)
+    def results(self):
+        results = Tree(
+            {
+                "TOTAL_REQUEST": sum(self.total_request.values()),
+                "RESOLVE_CTRL": self.resolve_ctrl,
+                "RESOLVE_IBGN": self.resolve_ibgn,
+                "RESOLVE_EBGN": self.resolve_ebgn,
             }
         )
         return results

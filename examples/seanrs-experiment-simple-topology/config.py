@@ -32,11 +32,11 @@ RESULTS_FORMAT = "PICKLE"
 
 # List of metrics to be measured in the experiments
 # The implementation of data collectors are located in ./icarus/execution/collectors.py
-DATA_COLLECTORS = ["CACHE_HIT_RATIO", "LINK_LOAD", "LATENCY", "PACKET_IN"]
+DATA_COLLECTORS = ["CACHE_HIT_RATIO", "LINK_LOAD", "LATENCY", "PACKET_IN", "SEANRS_DUMMY"]
 
 # Number of requests per second (over the whole network)
 REQ_RATE = 1.0
-
+# ALPHA = [0.6, 0.8, 1.0]
 # Queue of experiments
 EXPERIMENT_QUEUE = deque()
 
@@ -44,14 +44,15 @@ EXPERIMENT_QUEUE = deque()
 experiment = Tree()
 
 # Set topology
-experiment["topology"]["name"] = "SEANRS_SIMPLE"
+# experiment["topology"]["name"] = "SEANRS_SIMPLE"
+experiment["topology"]["name"] = "SEANRS_COMPLETE"
 
 # Set workload
 experiment["workload"] = {
     "name": "STATIONARY",
     "n_contents": 10 ** 2,
-    "n_warmup": 0,
-    "n_measured": 4 * 10 ** 1,
+    "n_warmup": 500,
+    "n_measured": 500,
     "alpha": 0.8,
     "rate": REQ_RATE,
 }

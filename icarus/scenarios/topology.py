@@ -13,12 +13,12 @@ A valid ICN topology must have the following attributes:
 """
 
 from os import path
+import logging
 
 import networkx as nx
 import fnss
 
 from icarus.registry import register_topology_factory
-
 
 __all__ = [
     "IcnTopology",
@@ -32,9 +32,10 @@ __all__ = [
     "topology_wide",
     "topology_garr",
     "topology_rocketfuel_latency",
-    "topology_seanrs_simple"
+    "topology_seanrs_simple",
+    "topology_seanrs_complete",
+    "topology_seanrs"
 ]
-
 
 # Delays
 # These values are suggested by this Computer Networks 2011 paper:
@@ -43,6 +44,7 @@ __all__ = [
 # http://www.mpi-sws.org/~druschel/publications/ds2-imc.pdf
 INTERNAL_LINK_DELAY = 2
 EXTERNAL_LINK_DELAY = 34
+logger = logging.getLogger("topology")
 
 # Path where all topologies are stored
 TOPOLOGY_RESOURCES_DIR = path.abspath(
@@ -107,6 +109,7 @@ class SEANRS_Topology(IcnTopology):
     """
     Specially for SEANet In-network-resolution topology
     """
+
     def switches(self):
         """
         Return a set of switches
@@ -127,8 +130,9 @@ class SEANRS_Topology(IcnTopology):
             if "stack" in self.node[v] and self.node[v]["stack"][0] == "bgn"
         }
 
+
 def largest_connected_component_subgraph(topology):
-    """Returns the largst connected component subgraph
+    """Returns the largest connected component subgraph
 
     Parameters
     ----------
@@ -137,7 +141,7 @@ def largest_connected_component_subgraph(topology):
 
     Returns
     -------
-    largest_connected_component_subgraphs : IcnTopology
+    largest_connected_component_sub-graphs : IcnTopology
         The topology of the largest connected component
     """
     c = max(nx.connected_components(topology), key=len)
@@ -169,7 +173,7 @@ def topology_tree(k, h, delay=1, **kwargs):
     routers = [
         v
         for v in topology.nodes()
-        if topology.node[v]["depth"] > 0 and topology.node[v]["depth"] < h
+        if 0 < topology.node[v]["depth"] < h
     ]
     topology.graph["icr_candidates"] = set(routers)
     for v in sources:
@@ -694,7 +698,7 @@ def topology_geant2(**kwargs):
     betw = nx.betweenness_centrality(topology)
     routers = sorted(routers, key=lambda k: betw[k])
     # Select as ICR candidates the top 50% routers for betweenness centrality
-    icr_candidates = routers[len(routers) // 2 :]
+    icr_candidates = routers[len(routers) // 2:]
     # add stacks to nodes
     topology.graph["icr_candidates"] = set(icr_candidates)
     for v in sources:
@@ -809,7 +813,7 @@ def topology_tiscali2(**kwargs):
 
 @register_topology_factory("ROCKET_FUEL")
 def topology_rocketfuel_latency(
-    asn, source_ratio=0.1, ext_delay=EXTERNAL_LINK_DELAY, **kwargs
+        asn, source_ratio=0.1, ext_delay=EXTERNAL_LINK_DELAY, **kwargs
 ):
     """Parse a generic RocketFuel topology with annotated latencies
 
@@ -875,30 +879,19 @@ def topology_rocketfuel_latency(
 @register_topology_factory("SEANRS_SIMPLE")
 def topology_seanrs_simple() -> SEANRS_Topology:
     """Create a simple topology for SEANRS
-
-    Parameters
-    ----------
-    as_num : int
-        Number of ASes
-    ctrl_num : int
-        Number of controllers
-    receiver_per_c : int
-        Number of receivers per controller
-    source_per_c : int
-        Number of sources per controller
+    Topology sketch
+           10 --------- 11
+          /  \           \
+        7 ---- 8          9
+      / | \   /  \       /  \
+    0  1  2  3    4     5    6
     """
-    # Topology sketch
-    #        10 --------- 11
-    #       /  \           \
-    #     7 ---- 8          9
-    #   / | \   /  \       /  \
-    # 0  1  2  3    4    5    6
     topology = SEANRS_Topology()
     # add nodes
     topology.add_nodes_from(range(12))
     # add edges
     topology.add_edges_from([(0, 7), (1, 7), (2, 7), (7, 8), (7, 10),
-                            (10, 8), (8, 3), (8, 4), (10, 11), (11, 9), (9, 5), (9, 6)])
+                             (10, 8), (8, 3), (8, 4), (10, 11), (11, 9), (9, 5), (9, 6)])
     # set 7-9as acc-switches
     acc_sw = [7, 8, 9]
     topology.graph["icr_candidates"] = set(acc_sw)
@@ -932,3 +925,85 @@ def topology_seanrs_simple() -> SEANRS_Topology:
     fnss.add_stack(topology, 11, "bgn", {"asn": 2})
 
     return topology
+
+
+@register_topology_factory("SEANRS_COMPLETE")
+def topology_seanrs_complete(**kwargs) -> SEANRS_Topology:
+    """
+    Read from completed seanrs topology file and
+    construct a SEANet name resolution system topology
+    """
+    f_topo = path.join(TOPOLOGY_RESOURCES_DIR, "SEANRS_Topology_complete.txt")
+    topology = SEANRS_Topology()
+    topology.graph["icr_candidates"] = set()
+
+    # read topology from file
+    def read_topo(topo):
+        line_num = 0
+        line_flag = "node"
+        with open(topo, "r") as f:
+            f.readline()
+            while True:
+                line_num += 1
+                line = f.readline()
+                if not line:
+                    break
+                if line.startswith("#"):
+                    continue
+                if line.startswith(">>> edge"):
+                    line_flag = "edge"
+                    continue
+                if line_flag == "node":
+                    node, tp, asn, ctrl, access = line.split(", ")
+                    # receiver
+                    if tp == "0":
+                        topology.add_node(int(node), type="receiver", asn=int(asn), sw=int(access))
+                        fnss.add_stack(topology, int(node), "receiver", {"asn": int(asn), "sw": int(access)})
+                    # source
+                    elif tp == "1":
+                        topology.add_node(int(node), type="source", asn=int(asn), ctrl=int(ctrl))
+                        fnss.add_stack(topology, int(node), "source", {"asn": int(asn), "ctrl": int(ctrl)})
+                    # switch
+                    elif tp == "2":
+                        topology.add_node(int(node), type="switch", asn=int(asn), ctrl=int(ctrl))
+                        fnss.add_stack(topology, int(node), "switch", {"asn": int(asn), "ctrl": int(ctrl)})
+                        topology.graph["icr_candidates"].add(int(node))
+                    # bgn
+                    elif tp == "3":
+                        topology.add_node(int(node), type="bgn", asn=int(asn))
+                        fnss.add_stack(topology, int(node), "bgn", {"asn": int(asn)})
+                else:
+                    n1, n2, ltype, delay, weight = line.split(", ")
+                    if ltype == "0":
+                        topology.add_edge(int(n1), int(n2), type="internal", delay=float(delay), weight=float(weight))
+                    elif ltype == "1":
+                        topology.add_edge(int(n1), int(n2), type="external", delay=float(delay), weight=float(weight))
+                    else:
+                        logger.warning("Unknown link type: %s, set to internal as default." % ltype)
+                        topology.add_edge(int(n1), int(n2), type="internal", delay=float(delay), weight=float(weight))
+
+        logger.info("Read topology from file: %s, total lines: %d", topo, line_num)
+        return topology
+
+    read_topo(f_topo)
+    logger.info("Topology info: %s", topology)
+    return topology
+
+
+@register_topology_factory("SEANRS")
+def topology_seanrs(**kwargs) -> SEANRS_Topology:
+    """
+    Read from seanrs topology file and
+    construct a SEANet name resolution system topology
+    Parameters
+    ----------
+    as_num : int
+        Number of ASes
+    ctrl_num : int
+        Number of controllers
+    receiver_per_c : int
+        Number of receivers per controller
+    source_per_c : int
+        Number of sources per controller
+    """
+    pass
