@@ -184,7 +184,7 @@ class CollectorProxy(DataCollector):
         ----------
         view : NetworkView
             An instance of the network view
-        collector : list of DataCollector
+        collectors : list of DataCollector
             List of instances of DataCollector that will be notified of events
         """
         self.view = view

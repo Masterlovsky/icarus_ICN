@@ -344,7 +344,7 @@ def topology_geant(**kwargs):
     topology = fnss.parse_topology_zoo(
         path.join(TOPOLOGY_RESOURCES_DIR, "Geant2012.graphml")
     ).to_undirected()
-    topology = largest_connected_component_subgraph(topology)
+    topology = largest_connected_component_subgraph(IcnTopology(topology))
     deg = nx.degree(topology)
     receivers = [v for v in topology.nodes() if deg[v] == 1]  # 8 nodes
     icr_candidates = [v for v in topology.nodes() if deg[v] > 2]  # 19 nodes
@@ -397,7 +397,7 @@ def topology_tiscali(**kwargs):
     topology = fnss.parse_rocketfuel_isp_map(
         path.join(TOPOLOGY_RESOURCES_DIR, "3257.r0.cch")
     ).to_undirected()
-    topology = largest_connected_component_subgraph(topology)
+    topology = largest_connected_component_subgraph(IcnTopology(topology))
     # degree of nodes
     deg = nx.degree(topology)
     # nodes with degree = 1
@@ -683,7 +683,7 @@ def topology_geant2(**kwargs):
     topology = fnss.parse_topology_zoo(
         path.join(TOPOLOGY_RESOURCES_DIR, "Geant2012.graphml")
     ).to_undirected()
-    topology = largest_connected_component_subgraph(topology)
+    topology = largest_connected_component_subgraph(IcnTopology(topology))
     deg = nx.degree(topology)
     receivers = [v for v in topology.nodes() if deg[v] == 1]  # 8 nodes
     # attach sources to topology
@@ -745,7 +745,7 @@ def topology_tiscali2(**kwargs):
     topology = fnss.parse_rocketfuel_isp_map(
         path.join(TOPOLOGY_RESOURCES_DIR, "3257.r0.cch")
     ).to_undirected()
-    topology = largest_connected_component_subgraph(topology)
+    topology = largest_connected_component_subgraph(IcnTopology(topology))
     # degree of nodes
     deg = nx.degree(topology)
     # nodes with degree = 1
@@ -835,7 +835,7 @@ def topology_rocketfuel_latency(
         TOPOLOGY_RESOURCES_DIR, "rocketfuel-latency", str(asn), "latencies.intra"
     )
     topology = fnss.parse_rocketfuel_isp_latency(f_topo).to_undirected()
-    topology = largest_connected_component_subgraph(topology)
+    topology = largest_connected_component_subgraph(IcnTopology(topology))
     # First mark all current links as inernal
     for u, v in topology.edges():
         topology.adj[u][v]["type"] = "internal"
@@ -933,7 +933,7 @@ def topology_seanrs_complete(**kwargs) -> SEANRS_Topology:
     Read from completed seanrs topology file and
     construct a SEANet name resolution system topology
     """
-    f_topo = path.join(TOPOLOGY_RESOURCES_DIR, "SEANRS_Topology_complete.txt")
+    f_topo = path.join(TOPOLOGY_RESOURCES_DIR, "seanrs_topo/SEANRS_Topology_complete.txt")
     topology = SEANRS_Topology()
     topology.graph["icr_candidates"] = set()
 
@@ -995,15 +995,55 @@ def topology_seanrs(**kwargs) -> SEANRS_Topology:
     """
     Read from seanrs topology file and
     construct a SEANet name resolution system topology
+    Principles:
+    1. Each AS has at least one BGN router.
+    2. Each source and receiver are connected to a decided switch.
+    3. Only switches has the ability to cache the name resolution information.
     Parameters
     ----------
-    as_num : int
-        Number of ASes
-    ctrl_num : int
-        Number of controllers
-    receiver_per_c : int
-        Number of receivers per controller
-    source_per_c : int
-        Number of sources per controller
     """
-    pass
+    ctrl_num = kwargs.get("ctrl_num") or 1
+    topology = fnss.parse_brite(
+        path.join(TOPOLOGY_RESOURCES_DIR, "seanrs_topo/test_seanrs.brite")
+    ).to_undirected()
+    topology = largest_connected_component_subgraph(IcnTopology(topology))
+    # read node_type file and add node type
+    f_node_type = path.join(TOPOLOGY_RESOURCES_DIR, "seanrs_topo/node_type.txt")
+    with open(f_node_type, "r") as f:
+        for line in f:
+            ntype, nodes = line.split(":")
+            nodes = nodes.strip("[ ]\n").split(", ")
+            for node in nodes:
+                if node != "":
+                    topology.nodes[int(node)]["type"] = ntype
+    # read layout file and add ctrl_number
+    f_layout = path.join(TOPOLOGY_RESOURCES_DIR, "seanrs_topo/layout.txt")
+    ctrl_dict = {}
+    with open(f_layout, "r") as f:
+        for line in f:
+            _l = line.strip().split(",")
+            node, ctrl = _l[0], _l[-1]
+            ctrl_dict[int(node)] = int(ctrl)
+    # add stack
+    for node in topology.nodes:
+        if topology.nodes[node]["type"] == "receiver":
+            fnss.add_stack(topology, node, "receiver", {"asn": topology.nodes[node]["AS"] + 1,
+                                                        "sw": list(topology.adj[node].keys())[0]}),
+        elif topology.nodes[node]["type"] == "source":
+            fnss.add_stack(topology, node, "source", {"asn": topology.nodes[node]["AS"] + 1, "ctrl": ctrl_dict[node]})
+        elif topology.nodes[node]["type"] == "switch":
+            # add icr_candidates
+            topology.graph["icr_candidates"].add(node)
+            fnss.add_stack(topology, node, "switch", {"asn": topology.nodes[node]["AS"] + 1, "ctrl": ctrl_dict[node]})
+        elif topology.nodes[node]["type"] == "bgn":
+            fnss.add_stack(topology, node, "bgn", {"asn": topology.nodes[node]["AS"] + 1})
+    # change link type from E_AS, E_RT to "external", "internal"
+    for u, v in topology.edges:
+        if topology.edges[u, v]["type"] == "E_AS":
+            topology.edges[u, v]["type"] = "external"
+        elif topology.edges[u, v]["type"] == "E_RT":
+            topology.edges[u, v]["type"] = "internal"
+
+    return SEANRS_Topology(topology)
+
+
