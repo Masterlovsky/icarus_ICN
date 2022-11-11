@@ -1009,6 +1009,7 @@ class SEANRSModel(NetworkModel):
 
     This class extends the NetworkModel class to add some new features in SEANet INNRS
     """
+
     def __init__(self, topology, cache_policy, shortest_path=None):
         super().__init__(topology, cache_policy, shortest_path)
         # controllers of global specific name space
@@ -1039,24 +1040,26 @@ class SEANRSModel(NetworkModel):
             elif stack_name == "bgn":
                 self.conhash.add_node(node, conf=stack_props)
                 self.bgn_nodes[stack_props['asn']].add(node)
-                #! set MDCF of each BGN node, capacity default to 10000
-                self.MCFS[node] = ScalableCuckooFilter(10000, 0.001, class_type=MarkedCuckooFilter)
+                # ! set MDCF of each BGN node, capacity default to 10000
+                self.MCFS[node] = ScalableCuckooFilter(100000, 10 ** (-6), class_type=MarkedCuckooFilter)
             elif stack_name == "switch":
                 self.ctrl_num[node] = stack_props["ctrl"]
                 self.switches_in_ctrl[stack_props['asn']][stack_props["ctrl"]].add(node)
             elif stack_name == "source":
                 self.ctrl_num[node] = stack_props["ctrl"]
-                #! register content to sdn controller
+                # ! register content to sdn controller
                 for content in stack_props["contents"]:
                     self.sdncontrollers[stack_props['asn']][stack_props['ctrl']][content] = node
+            elif stack_name == "router":
+                # todo: router is not considered in this version
+                pass
             else:
                 logger.warning("[SEANRS] Unknown stack name: %s", stack_name)
-        
-        #! register content to MDCF of BGN node
-        for node in self.source_node:
+        # ! register content to MDCF of BGN node
+        for node in self.source_node.keys():
             asn = self.as_num[node]
             for content in self.source_node[node]:
-                #* ----- intra-domain -----
+                # * ----- intra-domain -----
                 for bgn_node in self.bgn_nodes[asn]:
                     mcf = self.MCFS[bgn_node]
                     if node in self.ctrl_num:
@@ -1064,10 +1067,10 @@ class SEANRSModel(NetworkModel):
                         mcf.insert(str(content), mask=mask)
                     else:
                         logger.warning("[SEANRS] No controller number of source node: %s", node)
-                #* ----- inter-domain ------
+                # * ----- inter-domain ------
                 # consistent Hashing content to a bgn
                 ibgn = self.conhash.get_node(str(content))
                 # register to inter-domain bgn 
                 mcf = self.MCFS[ibgn]
-                mask = mcf.encode_mask("int", self.as_num[node])
+                mask = mcf.encode_mask("int", asn)
                 mcf.insert(str(content), mask=mask)

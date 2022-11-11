@@ -45,16 +45,17 @@ experiment = Tree()
 
 # Set topology
 # experiment["topology"]["name"] = "SEANRS_SIMPLE"
-experiment["topology"]["name"] = "SEANRS_COMPLETE"
+experiment["topology"]["name"] = "SEANRS"
 
 # Set workload
 experiment["workload"] = {
     "name": "STATIONARY",
-    "n_contents": 10 ** 2,
-    "n_warmup": 500,
-    "n_measured": 500,
+    "n_contents": 10 ** 3,
+    "n_warmup": 10 ** 3,
+    "n_measured": 5 * 10 ** 2,
     "alpha": 0.8,
     "rate": REQ_RATE,
+    "seed": 1234,
 }
 
 # Set cache placement

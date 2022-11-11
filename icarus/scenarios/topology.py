@@ -1002,11 +1002,11 @@ def topology_seanrs(**kwargs) -> SEANRS_Topology:
     Parameters
     ----------
     """
-    ctrl_num = kwargs.get("ctrl_num") or 1
     topology = fnss.parse_brite(
-        path.join(TOPOLOGY_RESOURCES_DIR, "seanrs_topo/test_seanrs.brite")
+        path.join(TOPOLOGY_RESOURCES_DIR, "seanrs_topo/test_seanrs2_extend.brite")
     ).to_undirected()
     topology = largest_connected_component_subgraph(IcnTopology(topology))
+    topology.graph["icr_candidates"] = set()
     # read node_type file and add node type
     f_node_type = path.join(TOPOLOGY_RESOURCES_DIR, "seanrs_topo/node_type.txt")
     with open(f_node_type, "r") as f:
@@ -1022,21 +1022,27 @@ def topology_seanrs(**kwargs) -> SEANRS_Topology:
     with open(f_layout, "r") as f:
         for line in f:
             _l = line.strip().split(",")
+            if len(_l) != 4:
+                raise RuntimeError("Wrong layout file format.")
             node, ctrl = _l[0], _l[-1]
             ctrl_dict[int(node)] = int(ctrl)
     # add stack
     for node in topology.nodes:
+        asn = topology.nodes[node].get("AS", 0)
         if topology.nodes[node]["type"] == "receiver":
-            fnss.add_stack(topology, node, "receiver", {"asn": topology.nodes[node]["AS"] + 1,
+            fnss.add_stack(topology, node, "receiver", {"asn": asn + 1,
                                                         "sw": list(topology.adj[node].keys())[0]}),
         elif topology.nodes[node]["type"] == "source":
-            fnss.add_stack(topology, node, "source", {"asn": topology.nodes[node]["AS"] + 1, "ctrl": ctrl_dict[node]})
+            fnss.add_stack(topology, node, "source", {"asn": asn + 1, "ctrl": ctrl_dict[node]})
         elif topology.nodes[node]["type"] == "switch":
             # add icr_candidates
             topology.graph["icr_candidates"].add(node)
-            fnss.add_stack(topology, node, "switch", {"asn": topology.nodes[node]["AS"] + 1, "ctrl": ctrl_dict[node]})
+            fnss.add_stack(topology, node, "switch", {"asn": asn + 1, "ctrl": ctrl_dict[node]})
         elif topology.nodes[node]["type"] == "bgn":
-            fnss.add_stack(topology, node, "bgn", {"asn": topology.nodes[node]["AS"] + 1})
+            fnss.add_stack(topology, node, "bgn", {"asn": asn + 1})
+        else:
+            topology.nodes[node]["type"] = "router"
+            fnss.add_stack(topology, node, "router", {"asn": asn + 1})
     # change link type from E_AS, E_RT to "external", "internal"
     for u, v in topology.edges:
         if topology.edges[u, v]["type"] == "E_AS":

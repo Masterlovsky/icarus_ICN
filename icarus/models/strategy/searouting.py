@@ -63,20 +63,23 @@ class SEANRS(Strategy):
                 self.controller.put_content(sw)
             return dst_n
 
-    def resolve_bgp(self, bgn, inter=False):
+    def resolve_bgn(self, bgn, type="ibgn"):
         """Resolve a content request in the bgp domain
 
         Parameters
         ----------
         bgn : Node
             The bgp node dealing with the request
-        inter: bool
+        type: str
             Whether the request is from the control-domain or manage-domain
+            control-domain -> ibgn, manage-domain -> ebgn
 
         Returns
         -------
         node_list : [Node]
             The valid access node list to route the request to
+        bgn_next:
+            The next bgp node to route the request to
         """
 
         def get_nearest_sw(_bgn, sw_set: set):
@@ -94,30 +97,61 @@ class SEANRS(Strategy):
             return nsw
 
         content = str(self.controller.session['content'])
-        self.controller.resolve(content, "ibgn")
         # check mcf(marked cuckoo filter) of bgn
         mcf = self.view.get_mcf(bgn)
         acc_sw = []  # acc_sw: [{1, 2, 3}, {4, 5, 6}, ...]
-        nearest_sw_list = []  # nearest_sw: [1, 4, ...]
-        if mcf.contains(content):
-            # if the content fingerprint is in the mcf, get the set mask from the mcf
-            area, idx_l = mcf.decode_mask(mcf.get(content))
-            if area == 'bit':
-                for idx in idx_l:
-                    acc_sw.append(self.view.get_switches_in_ctrl(self.view.get_asn(bgn), idx))
-                # get the nearest switch for each valid controller domain
-                nearest_sw_list = [get_nearest_sw(bgn, sw_l) for sw_l in acc_sw]
-            else:
-                if inter:
-                    return
-                # Directly goto the next inter-bgn to resolve the content
-                bgn_next = random.choice(list(self.view.get_bgns_in_as(idx_l[0])))
-                nearest_sw_list = self.resolve_bgp(bgn_next, True)
-                if not nearest_sw_list:
-                    logger.error('Perhaps false positive happens, No valid access node found in the inter-domain bgn.')
-                    # todo: return or hash the content fingerprint to find another bgn?
+        n_sw_list = []  # nearest_sw: [1, 4, ...]
+        bgn_next = None
 
-        return nearest_sw_list
+        if type == "ibgn":
+            self.controller.resolve(content, "ibgn")
+            if mcf.contains(content):
+                # if the content fingerprint is in the mcf, get the set mask from the mcf
+                area, idx_l = mcf.decode_mask(mcf.get(content))
+                if area == 'bit':
+                    for idx in idx_l:
+                        acc_sw.append(self.view.get_switches_in_ctrl(self.view.get_asn(bgn), idx))
+                    # get the nearest switch for each valid controller domain
+                    for sw_l in acc_sw:
+                        if get_nearest_sw(bgn, sw_l):
+                            n_sw_list.append(get_nearest_sw(bgn, sw_l))
+        elif type == "ebgn":
+            self.controller.resolve(content, "ebgn")
+            if mcf.contains(content):
+                area, idx_l = mcf.decode_mask(mcf.get(content))
+                if area == 'bit':
+                    for idx in idx_l:
+                        acc_sw.append(self.view.get_switches_in_ctrl(self.view.get_asn(bgn), idx))
+                    # get the nearest switch for each valid controller domain
+                    for sw_l in acc_sw:
+                        if get_nearest_sw(bgn, sw_l):
+                            n_sw_list.append(get_nearest_sw(bgn, sw_l))
+                else:
+                    if idx_l[0] == 0:
+                        logger.warning("False positive in the ebgn{}".format(bgn))
+                        return []
+                    # if resolve hit, get next manager-bgn from the mcf
+                    bgn_next = random.choice(list(self.view.get_bgns_in_as(idx_l[0])))
+                    mcf_next = self.view.get_mcf(bgn_next)
+                    # route to bgn_next
+                    self.controller.forward_request_path(bgn, bgn_next)
+                    self.controller.resolve(content, "ibgn")
+                    area_next, idx_l_next = mcf.decode_mask(mcf_next.get(content))
+                    if area_next == 'bit':
+                        for idx in idx_l_next:
+                            # todo: The following line is prone to bugs!! Not all control domains have access switches (topology problem)
+                            sws = self.view.get_switches_in_ctrl(idx_l[0], idx)
+                            if sws:
+                                acc_sw.append(sws)
+                        # get the nearest switch for each valid controller domain
+                        for sw_l in acc_sw:
+                            if get_nearest_sw(bgn_next, sw_l):
+                                n_sw_list.append(get_nearest_sw(bgn_next, sw_l))
+                    else:
+                        logger.warning("False positive in the ebgn{}".format(bgn))
+                        return []
+
+        return n_sw_list, bgn_next
 
     @inheritdoc(Strategy)
     def process_event(self, time, receiver, content, log):
@@ -125,12 +159,13 @@ class SEANRS(Strategy):
         Process a content request event
         ===== Main process of SEANet routing strategy =====
         """
-        # route content to the access switch
+        #* >>> 1. route content to the access switch <<<
         acc_switch = self.view.get_access_switch(receiver)
         self.controller.start_session(time, receiver, content, log)
         # route the request from receiver to access switch
         self.controller.forward_request_path(receiver, acc_switch)
-        # if the content is resolved in the ctrl domain, get content and return
+
+        #* >>> 2. If the content is resolved in the ctrl domain, get content and return <<<
         dst_node = self.resolve_ctrl(acc_switch)
         if dst_node:
             self.controller.forward_request_path(acc_switch, dst_node)
@@ -139,7 +174,8 @@ class SEANRS(Strategy):
             self.controller.forward_content_path(dst_node, receiver)
             self.controller.end_session(success=True)
             return
-        # if the content is not resolved in the ctrl domain, get the content from the manage-domain
+
+        #* >>> 3. If the content is not resolved in the ctrl domain, get the content from the manage-domain <<<
         # get bgn of acc_switch
         bgns: set = self.view.get_bgns_in_as(self.view.get_asn(acc_switch))
         # todo: choose a bgn from bgns set, now choose the first one
@@ -147,13 +183,12 @@ class SEANRS(Strategy):
         # route the request to bgn
         self.controller.forward_request_path(acc_switch, bgn)
         # if the content is resolved in the manage-domain, get acc-switch
-        nearest_sw_list = self.resolve_bgp(bgn)
-        if nearest_sw_list:
+        nearest_sw_list, _ = self.resolve_bgn(bgn, type="ibgn")
+        if len(nearest_sw_list) != 0:
             for sw in nearest_sw_list:
                 self.controller.forward_request_path(bgn, sw)
                 dst_node = self.resolve_ctrl(sw)
                 if dst_node:
-                    # self.controller.get_content(dst_node)
                     self.controller.forward_request_path(sw, dst_node)
                     break
                 # if the content is not resolved in the foreign ctrl domain, false positive happens, route back to bgn
@@ -163,15 +198,19 @@ class SEANRS(Strategy):
             self.controller.forward_content_path(dst_node, receiver)
             self.controller.end_session(success=True)
             return
+        # print("111 content:", content, "nearest_sw_list: ", nearest_sw_list)
 
-        # if the content is not resolved in the manage-domain, hash the content fingerprint to find inter-domain bgn
+        #* >>> 4. if the content is not resolved above, hash the content fingerprint to resolve in inter-domain bgn <<<
         inter_bgn = self.view.get_bgn_conhash(str(content))
         self.controller.forward_request_path(bgn, inter_bgn)
-        self.controller.resolve(content, "ebgn")
-        nearest_sw_list = self.resolve_bgp(inter_bgn)
-        if nearest_sw_list:
+        nearest_sw_list, bgn_nxt = self.resolve_bgn(inter_bgn, type="ebgn")
+        # print("222 content:", content, "nearest_sw_list: ", nearest_sw_list)
+        if len(nearest_sw_list) != 0:
             for sw in nearest_sw_list:
-                self.controller.forward_request_path(inter_bgn, sw)
+                if bgn_nxt:
+                    self.controller.forward_request_path(bgn_nxt, sw)
+                else:
+                    self.controller.forward_request_path(inter_bgn, sw)
                 dst_node = self.resolve_ctrl(sw)
                 if dst_node:
                     self.controller.forward_request_path(sw, dst_node)
@@ -179,6 +218,8 @@ class SEANRS(Strategy):
                 # if the content is not resolved in the foreign ctrl domain, false positive happens, route back to bgn
                 self.controller.forward_request_path(sw, inter_bgn)
         else:
-            logger.warning('No valid access node found in the inter-domain bgn.')
+            logger.warning('No valid access node found in the inter-domain bgn.'
+                           'inter-bgn: %s, content: %s, source: %s' % (
+                               inter_bgn, content, self.view.content_source(content)))
 
         self.controller.end_session()

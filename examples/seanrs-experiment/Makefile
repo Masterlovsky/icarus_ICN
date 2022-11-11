@@ -1,5 +1,6 @@
 CONFIG_FILE ?= config.py
 RESULTS_FILE ?= results.pickle
+PRINT_FILE ?= 1.txt
 
 .PHONY: check_installed run clean
 
@@ -10,6 +11,9 @@ check_installed:
 
 run: check_installed
 	icarus run --results $(RESULTS_FILE) $(CONFIG_FILE)
+
+print: check_installed
+	icarus results print $(RESULTS_FILE) > $(PRINT_FILE)
 
 clean:
 	rm -rf $(RESULTS_FILE)

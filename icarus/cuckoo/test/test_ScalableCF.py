@@ -2,12 +2,12 @@ from icarus.cuckoo.filter import *
 import sys
 
 if __name__ == '__main__':
-    cuckoo = ScalableCuckooFilter(10000, 0.02, 4, class_type=MarkedCuckooFilter)
+    cuckoo = ScalableCuckooFilter(10000, 0.00001, 4, class_type=MarkedCuckooFilter)
     succ_count = 0
     check_count = 0
     for i in range(10000):
         try:
-            cuckoo.insert(str(i), mask="0"*15+"1"+"0"*32)
+            cuckoo.insert(str(i), mask=cuckoo.encode_mask('int', i))
             # cuckoo.insert(str(i))
             succ_count += 1
         except Exception as e:
@@ -15,6 +15,14 @@ if __name__ == '__main__':
     print("succ_count: ", succ_count)
     print("cuckoo get(): ", cuckoo.get(str(5358)))
     size = 100000
+    for i in range(10002):
+        # print("cuckoo get {}: {}".format(i, cuckoo.get(str(i))))
+        if cuckoo.contains(str(i)):
+            check_count += 1
+    print("check_count: ", check_count)
+    # exit(0)
+
+    check_count = 0
     for i in range(20000, 20000 + size):
         if cuckoo.contains(str(i)):
             check_count += 1
