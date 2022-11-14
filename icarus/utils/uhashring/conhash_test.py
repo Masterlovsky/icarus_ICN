@@ -1,7 +1,6 @@
 # testing the consistent hashing methods
 from icarus.scenarios.topology import SEANRS_Topology
-import fnss
-from icarus.uhashring import HashRing
+from icarus.utils.uhashring import HashRing
 import mmh3
 
 class TestNode(object):

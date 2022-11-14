@@ -1,4 +1,4 @@
-from icarus.cuckoo.filter import *
+from icarus.utils.cuckoo.filter import *
 import sys
 
 if __name__ == '__main__':

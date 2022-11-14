@@ -8,7 +8,7 @@ from bitarray import bitarray
 from netaddr import IPAddress
 
 import mmh3
-from icarus.cuckoo.bucket import Bucket
+from icarus.utils.cuckoo.bucket import Bucket
 
 
 class BucketTest(unittest.TestCase):

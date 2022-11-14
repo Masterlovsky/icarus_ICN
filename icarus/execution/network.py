@@ -21,8 +21,8 @@ import fnss
 
 from icarus.registry import CACHE_POLICY
 from icarus.util import iround, path_links
-from icarus.cuckoo.filter import *
-from icarus.uhashring import HashRing
+from icarus.utils.cuckoo import *
+from icarus.utils.uhashring import HashRing
 
 __all__ = ["NetworkModel", "NetworkView", "NetworkController"]
 
