@@ -23,6 +23,7 @@ from icarus.registry import CACHE_POLICY
 from icarus.util import iround, path_links
 from icarus.utils.cuckoo import *
 from icarus.utils.uhashring import HashRing
+from icarus.utils.dht_chord import DHT, NodeDHT
 
 __all__ = ["NetworkModel", "NetworkView", "NetworkController"]
 
@@ -72,7 +73,7 @@ class NetworkView:
         model : NetworkModel
             The network model instance
         """
-        if not (isinstance(model, NetworkModel) or isinstance(model, SEANRSModel)):
+        if not (isinstance(model, NetworkModel) or isinstance(model, SEANRSModel) or isinstance(model, MDHTModel)):
             raise ValueError(
                 "The model argument must be an instance of " "NetworkModel"
             )
@@ -236,6 +237,23 @@ class NetworkView:
         sdn_controller = self.model.sdncontrollers[asn][ctrln]
         if content in sdn_controller:
             return sdn_controller[content]
+
+    def get_dhts(self):
+        """Return the DHTs
+        ---- Only used in MDHT topology. ----
+        Returns
+        -------
+        dhts : dict
+            The DHTs
+        """
+        return self.model.dhts
+
+    def dn2tn(self, dht_str: str) -> int:
+        """
+        ---- Only used in MDHT topology. ----
+        return topology node id from dht node str, like: 'l1@3@1@174'
+        """
+        return self.model.dn2tn[dht_str]
 
     def shortest_path(self, s, t):
         """Return the shortest path from *s* to *t*
@@ -1074,3 +1092,84 @@ class SEANRSModel(NetworkModel):
                 mcf = self.MCFS[ibgn]
                 mask = mcf.encode_mask("int", asn)
                 mcf.insert(str(content), mask=mask)
+
+
+class MDHTModel(NetworkModel):
+    """
+    Paper [1] MDHT: A Hierarchical Name Resolution Service for Information-centric Networks
+    MDHT Name Resolution System Network Model
+    3 levels of MDHT: BGN O(log(n)), AS O(1), and ctrl O(1)
+    """
+
+    def __init__(self, topology, cache_policy, shortest_path=None, k=(10, 10, 15)):
+        """
+        Parameters:
+            k: 3 levels, 2 ** k is the number of buckets in each level of MDHT
+        """
+        super().__init__(topology, cache_policy, shortest_path)
+        self.dn2tn = {}  # dht node id to topology node id
+        # as number of each node, as_num[node] = as_id
+        self.as_num = {}
+        # controller number of switch, ctrl_num[node] = ctrl_id
+        self.ctrl_num = {}
+        # create DHTs in 3 levels and add nodes to them
+        self.dhts = defaultdict(dict)
+        for node in topology.nodes():
+            # get 3 levels dht ids of node
+            dht_ids = [MDHTModel.get_hash_id(node, k[i]) for i in range(3)]
+            # ! >>> level 1: DHTs of ctrl-domain
+            stack_name, stack_props = fnss.get_stack(topology, node)
+            self.as_num[node] = stack_props["asn"]
+            as_id = str(stack_props["asn"])
+            if stack_name == "receiver" or stack_name == "source":
+                self.ctrl_num[node] = stack_props["ctrl"]
+                continue
+            if "ctrl" in stack_props:
+                self.ctrl_num[node] = stack_props["ctrl"]
+                ctrl_id = str(stack_props["ctrl"])
+                if as_id + "@" + ctrl_id not in self.dhts[1]:
+                    # todo: how to set DHT size?
+                    self.dhts[1][as_id + "@" + ctrl_id] = DHT(k[0], dht_ids[0])
+                    self.dn2tn["l1@" + as_id + "@" + ctrl_id + "@" + str(dht_ids[0])] = node
+                # print("add node %s/%s to dht %s" % (node, dht_ids[0], as_id + "@" + ctrl_id))
+                if self.dhts[1][as_id + "@" + ctrl_id].join(NodeDHT(dht_ids[0])):
+                    self.dn2tn["l1@" + as_id + "@" + ctrl_id + "@" + str(dht_ids[0])] = node
+            # ! >>> level 2: DHTs of each as
+            if as_id not in self.dhts[2]:
+                self.dhts[2][as_id] = DHT(k[1], dht_ids[1])
+                self.dn2tn["l2@" + as_id + "@" + str(dht_ids[1])] = node
+            if self.dhts[2][as_id].join(NodeDHT(dht_ids[1])):
+                self.dn2tn["l2@" + as_id + "@" + str(dht_ids[1])] = node
+            # ! >>> level 3: DHTs of global
+            if "G" not in self.dhts[3]:
+                self.dhts[3]["G"] = DHT(k[2], dht_ids[2])
+                self.dn2tn["l3@" + str(dht_ids[2])] = node
+            if self.dhts[3]["G"].join(NodeDHT(dht_ids[2])):
+                self.dn2tn["l3@" + str(dht_ids[2])] = node
+
+        # update finger tables of DHTs
+        for level in range(1, 4):
+            for dht in self.dhts[level].values():
+                dht.update_all_finger_tables()
+                # print("number of nodes: {} in dht {}".format(dht.get_num_nodes(), dht))
+
+        # register contents
+        for node in self.source_node.keys():
+            for content in self.source_node[node]:
+                stack_name, stack_props = fnss.get_stack(topology, node)
+                as_id = str(stack_props["asn"])
+                if "ctrl" in stack_props:
+                    ctrl_id = str(stack_props["ctrl"])
+                    self.dhts[1][as_id + "@" + ctrl_id].store(str(content), node)
+                self.dhts[2][as_id].store(str(content), node)
+                self.dhts[3]["G"].store(str(content), node)
+
+    @staticmethod
+    def get_hash_id(node_id, k) -> int:
+        """
+        get hash id of node_id
+        :param node_id: node id
+        :param k: 2 ** k is the number of slots in the DHT
+        :return: hash id
+        """
+        return int(hash(str(node_id)) % (2 ** k))

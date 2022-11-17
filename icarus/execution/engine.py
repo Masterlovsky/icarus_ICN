@@ -8,6 +8,7 @@ and providing them to a strategy instance.
 from icarus.execution import (
     NetworkModel,
     SEANRSModel,
+    MDHTModel,
     NetworkView,
     NetworkController,
     CollectorProxy,
@@ -50,8 +51,13 @@ def exec_experiment(topology, workload, netconf, strategy, cache_policy, collect
     results : Tree
         A tree with the aggregated simulation results from all collectors
     """
+    strategy_name = strategy["name"]
+
     if isinstance(topology, SEANRS_Topology):
-        model = SEANRSModel(topology, cache_policy, **netconf)
+        if strategy_name == "MDHT":
+            model = MDHTModel(topology, cache_policy, **netconf)
+        else:
+            model = SEANRSModel(topology, cache_policy, **netconf)
     else:
         model = NetworkModel(topology, cache_policy, **netconf)
     view = NetworkView(model)
@@ -63,7 +69,6 @@ def exec_experiment(topology, workload, netconf, strategy, cache_policy, collect
     collector = CollectorProxy(view, collectors_inst)
     controller.attach_collector(collector)
 
-    strategy_name = strategy["name"]
     strategy_args = {k: v for k, v in strategy.items() if k != "name"}
     strategy_inst = STRATEGY[strategy_name](view, controller, **strategy_args)
 

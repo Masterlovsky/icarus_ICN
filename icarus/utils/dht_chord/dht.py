@@ -13,13 +13,19 @@ class NodeDHT:
         for i in range(1, k):
             self.fingerTable.append(dht.find_node(dht.get_start_node(), self.ID + 2 ** i))
 
+    def __repr__(self):
+        return str(self.ID)
+
+    def __eq__(self, other):
+        return self.ID == other.ID
+
 
 class DHT:
     # The total number of IDs available in the DHT is 2 ** k
-    def __init__(self, k: int):
+    def __init__(self, k: int, start: int = 0):
         self._k = k
         self._size = 2 ** k
-        self._startNode = NodeDHT(0, k)
+        self._startNode = NodeDHT(start, k)
         self._startNode.fingerTable[0] = self._startNode
         self._startNode.prev = self._startNode
         self._startNode.update_finger_table(self, k)
@@ -50,18 +56,18 @@ class DHT:
             node = node.fingerTable[0]
         return n
 
-    def find_next_direct_node(self, key, node):
+    def find_next_direct_node(self, key, start):
         hashid = self.get_hash_id(key)
-        if node.ID == hashid:
-            return node
-        if self.distance(node.ID, hashid) <= self.distance(node.fingerTable[0].ID, hashid):
-            return node.fingerTable[0]
-        tabsize = len(node.fingerTable)
+        if start.ID == hashid:
+            return start
+        if self.distance(start.ID, hashid) <= self.distance(start.fingerTable[0].ID, hashid):
+            return start.fingerTable[0]
+        tabsize = len(start.fingerTable)
         i = 0
-        next_node = node.fingerTable[-1]
+        next_node = start.fingerTable[-1]
         while i < tabsize - 1:
-            if self.distance(node.fingerTable[i].ID, hashid) < self.distance(node.fingerTable[i + 1].ID, hashid):
-                next_node = node.fingerTable[i]
+            if self.distance(start.fingerTable[i].ID, hashid) < self.distance(start.fingerTable[i + 1].ID, hashid):
+                next_node = start.fingerTable[i]
                 break
             i = i + 1
         return next_node
@@ -94,9 +100,10 @@ class DHT:
         if start is None:
             start = self._startNode
         node_for_key = self.find_node(start, key)
-        return self.get_value_from_node(key, node_for_key)
+        return DHT.get_value_from_node(node_for_key, key)
 
-    def get_value_from_node(self, key, node):
+    @staticmethod
+    def get_value_from_node(node, key):
         if key in node.data:
             return node.data[key]
         return None
@@ -116,8 +123,8 @@ class DHT:
         # print(origNode.ID, "  ", newNode.ID)
         # If there is a node with the same id, decline the join request for now
         if orig_node.ID == newNode.ID:
-            # print("There is already a node with the same id!")
-            return
+            # print("There is already a node with the same id:{}!".format(newNode.ID))
+            return False
 
         # Copy the key-value pairs that will belong to the new node after
         # the node is inserted in the system
@@ -141,6 +148,8 @@ class DHT:
             hashid = self.get_hash_id(key)
             if self.distance(hashid, newNode.ID) < self.distance(hashid, orig_node.ID):
                 del orig_node.data[key]
+
+        return True
 
     def leave(self, node):
         # Copy all its key-value pairs to its successor in the system

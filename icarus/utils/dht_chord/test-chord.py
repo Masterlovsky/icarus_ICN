@@ -16,15 +16,21 @@ if __name__ == '__main__':
 
     # add key-value pairs
     for i in range(100):
-        d.store(i, "hello" + str(i))
+        d.store(str(i), "hello" + str(i))
 
+    d.update_all_finger_tables()
+    print("dht[{}]: {}".format(0, d.get_start_node().fingerTable))
     # search for a key
-    key = 3
+    key = "32"
+    print("Searching for key {} ,result: {}".format(key, d.lookup(key)))
+    nxt = d.get_start_node()
+    res = d.find_node(nxt, key)
+    print("res_node is {}".format(res.ID))
+    while nxt != res:
+        print("find next node: {}, content:{}".format(nxt.ID, nxt.data))
+        nxt = d.find_next_direct_node(key, nxt)
+
+    # nxt = d.find_next_direct_node(key, nxt)
+    print("Finally find next node: {}, value:{}".format(nxt.ID, d.get_value_from_node(nxt, key)))
+    key = "1000"
     print("Searching for key: ", d.lookup(key))
-    nxt = d.find_next_direct_node(key, d.get_start_node())
-    print("find next node: ", nxt.ID)
-    key = 1000
-    print("Searching for key: ", d.lookup(key))
-
-
-

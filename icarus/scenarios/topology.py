@@ -34,7 +34,7 @@ __all__ = [
     "topology_rocketfuel_latency",
     "topology_seanrs_simple",
     "topology_seanrs_complete",
-    "topology_seanrs"
+    "topology_seanrs",
 ]
 
 # Delays
@@ -1030,7 +1030,7 @@ def topology_seanrs(**kwargs) -> SEANRS_Topology:
     for node in topology.nodes:
         asn = topology.nodes[node].get("AS", 0)
         if topology.nodes[node]["type"] == "receiver":
-            fnss.add_stack(topology, node, "receiver", {"asn": asn + 1,
+            fnss.add_stack(topology, node, "receiver", {"asn": asn + 1, "ctrl": ctrl_dict[node],
                                                         "sw": list(topology.adj[node].keys())[0]}),
         elif topology.nodes[node]["type"] == "source":
             fnss.add_stack(topology, node, "source", {"asn": asn + 1, "ctrl": ctrl_dict[node]})
@@ -1042,7 +1042,7 @@ def topology_seanrs(**kwargs) -> SEANRS_Topology:
             fnss.add_stack(topology, node, "bgn", {"asn": asn + 1})
         else:
             topology.nodes[node]["type"] = "router"
-            fnss.add_stack(topology, node, "router", {"asn": asn + 1})
+            fnss.add_stack(topology, node, "router", {"asn": asn + 1, "ctrl": ctrl_dict[node]})
     # change link type from E_AS, E_RT to "external", "internal"
     for u, v in topology.edges:
         if topology.edges[u, v]["type"] == "E_AS":
@@ -1051,5 +1051,3 @@ def topology_seanrs(**kwargs) -> SEANRS_Topology:
             topology.edges[u, v]["type"] = "internal"
 
     return SEANRS_Topology(topology)
-
-
