@@ -49,6 +49,7 @@ class MDHT(Strategy):
         self.controller.forward_request_path(acc_sw, res_node_l1_topo)
         dst = dht.get_value_from_node(res_node_l1_dht, str(content))
         if dst:
+            self.controller.resolve(content, "l1")
             # print("Get content:{} from dht-level-1, size: {}".format(content, dht.get_num_nodes()))
             self.controller.forward_request_path(res_node_l1_topo, dst)
             self.controller.forward_content_path(dst, receiver)
@@ -61,6 +62,7 @@ class MDHT(Strategy):
         self.controller.forward_request_path(res_node_l1_topo, res_node_l2_topo)
         dst = dht.get_value_from_node(res_node_l2_dht, str(content))
         if dst:
+            self.controller.resolve(content, "l2")
             # print("Get content:{} from dht-level-2, size: {}".format(content, dht.get_num_nodes()))
             self.controller.forward_request_path(res_node_l2_topo, dst)
             self.controller.forward_content_path(dst, receiver)
@@ -69,6 +71,7 @@ class MDHT(Strategy):
         # !  >>> 2.2 if fail, check dhts[3] hop by hop, if success, get the dst
         dht = self.dhts[3]["G"]
         res_node_l3_dht = dht.find_node(dht.get_start_node(), str(content))
+        self.controller.resolve(content, "l3")
         cur_node = dht.find_next_direct_node(str(content), dht.get_start_node())
         cur_topo = self.view.dn2tn("l3@" + str(cur_node.ID))
         self.controller.forward_request_path(res_node_l2_topo, cur_topo)

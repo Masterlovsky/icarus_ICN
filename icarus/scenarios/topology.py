@@ -1002,13 +1002,18 @@ def topology_seanrs(**kwargs) -> SEANRS_Topology:
     Parameters
     ----------
     """
+    if "scale" not in kwargs:
+        scale = "5x20"
+    else:
+        scale = kwargs["scale"]
+    topo_path = "seanrs_topo/" + scale + "/"
     topology = fnss.parse_brite(
-        path.join(TOPOLOGY_RESOURCES_DIR, "seanrs_topo/test_seanrs2_extend.brite")
+        path.join(TOPOLOGY_RESOURCES_DIR, topo_path + "seanrs" + scale + "_extend.brite")
     ).to_undirected()
     topology = largest_connected_component_subgraph(IcnTopology(topology))
     topology.graph["icr_candidates"] = set()
     # read node_type file and add node type
-    f_node_type = path.join(TOPOLOGY_RESOURCES_DIR, "seanrs_topo/node_type.txt")
+    f_node_type = path.join(TOPOLOGY_RESOURCES_DIR, topo_path + "node_type" + scale + ".txt")
     with open(f_node_type, "r") as f:
         for line in f:
             ntype, nodes = line.split(":")
@@ -1017,12 +1022,12 @@ def topology_seanrs(**kwargs) -> SEANRS_Topology:
                 if node != "":
                     topology.nodes[int(node)]["type"] = ntype
     # read layout file and add ctrl_number
-    f_layout = path.join(TOPOLOGY_RESOURCES_DIR, "seanrs_topo/layout.txt")
+    f_layout = path.join(TOPOLOGY_RESOURCES_DIR, topo_path + "layout" + scale + ".txt")
     ctrl_dict = {}
     with open(f_layout, "r") as f:
         for line in f:
             _l = line.strip().split(",")
-            if len(_l) != 4:
+            if len(_l) not in (4, 5):
                 raise RuntimeError("Wrong layout file format.")
             node, ctrl = _l[0], _l[-1]
             ctrl_dict[int(node)] = int(ctrl)

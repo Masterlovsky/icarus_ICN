@@ -159,13 +159,13 @@ class SEANRS(Strategy):
         Process a content request event
         ===== Main process of SEANet routing strategy =====
         """
-        #* >>> 1. route content to the access switch <<<
+        # * >>> 1. route content to the access switch <<<
         acc_switch = self.view.get_access_switch(receiver)
         self.controller.start_session(time, receiver, content, log)
         # route the request from receiver to access switch
         self.controller.forward_request_path(receiver, acc_switch)
 
-        #* >>> 2. If the content is resolved in the ctrl domain, get content and return <<<
+        # * >>> 2. If the content is resolved in the ctrl domain, get content and return <<<
         dst_node = self.resolve_ctrl(acc_switch)
         if dst_node:
             self.controller.forward_request_path(acc_switch, dst_node)
@@ -175,7 +175,7 @@ class SEANRS(Strategy):
             self.controller.end_session(success=True)
             return
 
-        #* >>> 3. If the content is not resolved in the ctrl domain, get the content from the manage-domain <<<
+        # * >>> 3. If the content is not resolved in the ctrl domain, get the content from the manage-domain <<<
         # get bgn of acc_switch
         bgns: set = self.view.get_bgns_in_as(self.view.get_asn(acc_switch))
         # todo: choose a bgn from bgns set, now choose the first one
@@ -200,7 +200,7 @@ class SEANRS(Strategy):
             return
         # print("111 content:", content, "nearest_sw_list: ", nearest_sw_list)
 
-        #* >>> 4. if the content is not resolved above, hash the content fingerprint to resolve in inter-domain bgn <<<
+        # * >>> 4. if the content is not resolved above, hash the content fingerprint to resolve in inter-domain bgn <<<
         inter_bgn = self.view.get_bgn_conhash(str(content))
         self.controller.forward_request_path(bgn, inter_bgn)
         nearest_sw_list, bgn_nxt = self.resolve_bgn(inter_bgn, type="ebgn")
@@ -221,5 +221,7 @@ class SEANRS(Strategy):
             logger.warning('No valid access node found in the inter-domain bgn.'
                            'inter-bgn: %s, content: %s, source: %s' % (
                                inter_bgn, content, self.view.content_source(content)))
+        if dst_node:
+            self.controller.forward_content_path(dst_node, receiver)
 
         self.controller.end_session()

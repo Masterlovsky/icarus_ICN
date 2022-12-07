@@ -20,6 +20,7 @@ all content identifiers. This is needed for content placement.
 import random
 import csv
 
+import fnss
 import networkx as nx
 
 from icarus.tools import TruncatedZipfDist
@@ -30,7 +31,15 @@ __all__ = [
     "GlobetraffWorkload",
     "TraceDrivenWorkload",
     "YCSBWorkload",
+    "LPWorkload",
 ]
+
+
+def get_nodes_with_type(topology, ntype="receiver"):
+    """
+    Return the nodes of a topology, which are of a given type(receivers or source).
+    """
+    return [v for v in topology if topology.node[v]["stack"][0] == ntype]
 
 
 @register_workload("STATIONARY")
@@ -84,24 +93,24 @@ class StationaryWorkload:
     """
 
     def __init__(
-        self,
-        topology,
-        n_contents,
-        alpha,
-        beta=0,
-        rate=1.0,
-        n_warmup=10 ** 5,
-        n_measured=4 * 10 ** 5,
-        seed=None,
-        **kwargs
+            self,
+            topology,
+            n_contents,
+            alpha,
+            beta=0,
+            rate=1.0,
+            n_warmup=10 ** 5,
+            n_measured=4 * 10 ** 5,
+            seed=None,
+            **kwargs
     ):
         if alpha < 0:
             raise ValueError("alpha must be positive")
         if beta < 0:
             raise ValueError("beta must be positive")
-        self.receivers = [
-            v for v in topology.nodes() if topology.node[v]["stack"][0] == "receiver"
-        ]
+        self.topology = topology
+        self.sources = get_nodes_with_type(topology, "source")
+        self.receivers = get_nodes_with_type(topology, "receiver")
         self.zipf = TruncatedZipfDist(alpha, n_contents)
         self.n_contents = n_contents
         self.contents = range(1, n_contents + 1)
@@ -115,7 +124,7 @@ class StationaryWorkload:
             degree = nx.degree(self.topology)
             self.receivers = sorted(
                 self.receivers,
-                key=lambda x: degree[iter(topology.adj[x]).next()],
+                key=lambda x: degree[iter(topology.adj[x]).__next__()],
                 reverse=True,
             )
             self.receiver_dist = TruncatedZipfDist(beta, len(self.receivers))
@@ -176,9 +185,7 @@ class GlobetraffWorkload:
         """Constructor"""
         if beta < 0:
             raise ValueError("beta must be positive")
-        self.receivers = [
-            v for v in topology.nodes() if topology.node[v]["stack"][0] == "receiver"
-        ]
+        self.receivers = get_nodes_with_type(topology, "receiver")
         self.n_contents = 0
         with open(contents_file) as f:
             reader = csv.reader(f, delimiter="\t")
@@ -262,16 +269,16 @@ class TraceDrivenWorkload:
     """
 
     def __init__(
-        self,
-        topology,
-        reqs_file,
-        contents_file,
-        n_contents,
-        n_warmup,
-        n_measured,
-        rate=1.0,
-        beta=0,
-        **kwargs
+            self,
+            topology,
+            reqs_file,
+            contents_file,
+            n_contents,
+            n_warmup,
+            n_measured,
+            rate=1.0,
+            beta=0,
+            **kwargs
     ):
         """Constructor"""
         if beta < 0:
@@ -343,14 +350,14 @@ class YCSBWorkload:
     """
 
     def __init__(
-        self,
-        workload,
-        n_contents,
-        n_warmup,
-        n_measured,
-        alpha=0.99,
-        seed=None,
-        **kwargs
+            self,
+            workload,
+            n_contents,
+            n_warmup,
+            n_measured,
+            alpha=0.99,
+            seed=None,
+            **kwargs
     ):
         """Constructor
 
@@ -396,5 +403,114 @@ class YCSBWorkload:
             log = req_counter >= self.n_warmup
             event = {"op": op, "item": item, "log": log}
             yield event
+            req_counter += 1
+        return
+
+
+@register_workload("LEVEL_PROBABILITY")
+class LPWorkload:
+    """This function generates events on the fly, i.e. instead of creating an
+    event schedule to be kept in memory, returns an iterator that generates
+    events when needed.
+
+    This is useful for running large schedules of events where RAM is limited
+    as its memory impact is considerably lower.
+
+    These requests are Poisson-distributed.
+    Depends on the neighborhood effect, the probability that a user requests an item
+    is correlated with the content in local source. We call the probability that a user
+    requests an item in local source as the level probability -- LP.
+
+    All requests are mapped to receivers uniformly unless a positive *beta*
+    parameter is specified.
+
+    If a *beta* parameter is specified, then receivers issue requests at
+    different rates. The algorithm used to determine the requests rates for
+    each receiver is the following:
+     * All receiver are sorted in decreasing order of degree of the PoP they
+       are attached to. This assumes that all receivers have degree = 1 and are
+       attached to a node with degree > 1
+     * Rates are then assigned following a Zipf distribution of coefficient
+       beta where nodes with higher-degree PoPs have a higher request rate
+
+    Parameters
+    ----------
+    topology : fnss.Topology
+        The topology to which the workload refers
+    n_contents : int
+        The number of content object
+    alpha : float
+        The Zipf alpha parameter
+    beta : float, optional
+        Parameter indicating
+    rate : float, optional
+        The mean rate of requests per second
+    n_warmup : int, optional
+        The number of warmup requests (i.e. requests executed to fill cache but
+        not logged)
+    n_measured : int, optional
+        The number of logged requests after the warmup
+
+    Returns
+    -------
+    events : iterator
+        Iterator of events. Each event is a 2-tuple where the first element is
+        the timestamp at which the event occurs and the second element is a
+        dictionary of event attributes.
+    """
+
+    def __init__(
+            self,
+            topology,
+            n_contents,
+            alpha,
+            lp,
+            beta=0,
+            rate=1.0,
+            n_warmup=10 ** 5,
+            n_measured=4 * 10 ** 5,
+            seed=None,
+            **kwargs
+    ):
+        if lp < 0:
+            raise ValueError("lp must be positive")
+        if beta < 0:
+            raise ValueError("beta must be positive")
+        self.topology = topology
+        self.sources = get_nodes_with_type(topology, "source")
+        self.receivers = get_nodes_with_type(topology, "receiver")
+        self.n_contents = n_contents
+        self.contents = range(1, n_contents + 1)
+        self.lp = lp
+        self.zipf = TruncatedZipfDist(alpha, n_contents)
+        self.rate = rate
+        self.n_warmup = n_warmup
+        self.n_measured = n_measured
+        random.seed(seed)
+        self.beta = beta
+        if beta != 0:
+            degree = nx.degree(self.topology)
+            self.receivers = sorted(
+                self.receivers,
+                key=lambda x: degree[iter(topology.adj[x]).__next__()],
+                reverse=True,
+            )
+            self.receiver_dist = TruncatedZipfDist(beta, len(self.receivers))
+
+    def __iter__(self):
+        req_counter = 0
+        t_event = 0.0
+
+        while req_counter < self.n_warmup + self.n_measured:
+            t_event += random.expovariate(self.rate)
+            if self.beta == 0:
+                receiver = random.choice(self.receivers)
+            else:
+                receiver = self.receivers[self.receiver_dist.rv() - 1]
+
+            content = int(self.zipf.rv())
+            log = req_counter >= self.n_warmup
+            event = {"receiver": receiver, "content": content, "log": log}
+            yield (t_event, event)
             req_counter += 1
         return

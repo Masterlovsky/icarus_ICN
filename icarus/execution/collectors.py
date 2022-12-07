@@ -10,6 +10,8 @@ To create a new data collector, it is sufficient to create a new class
 inheriting from the `DataCollector` class and override all required methods.
 """
 import collections
+import random
+import numpy as np
 
 from icarus.registry import register_data_collector
 from icarus.tools import cdf
@@ -24,7 +26,7 @@ __all__ = [
     "PathStretchCollector",
     "DummyCollector",
     "PacketInCollector",
-    "SEANRS_DUMMY_Collector"
+    "LEVEL_HIT_Collector"
 ]
 
 
@@ -259,7 +261,7 @@ class LinkLoadCollector(DataCollector):
         self.view = view
         self.req_count = collections.defaultdict(int)
         self.cont_count = collections.defaultdict(int)
-        if req_size <= 0 or content_size <= 0:
+        if req_size <= 0 or content_size < 0:
             raise ValueError("req_size and content_size must be positive")
         self.req_size = req_size
         self.content_size = content_size
@@ -312,10 +314,26 @@ class LinkLoadCollector(DataCollector):
             if len(link_loads_ext) > 0
             else 0
         )
+        sd_load_int = (
+            np.std(list(link_loads_int.values()))
+            if len(link_loads_int) > 0
+            else 0
+        )
+        sd_load_ext = (
+            np.std(list(link_loads_ext.values()))
+            if len(link_loads_ext) > 0
+            else 0
+        )
+        max_load_int = np.max(list(link_loads_int.values())) if len(link_loads_int) > 0 else 0
+        min_load_int = np.min(list(link_loads_int.values())) if len(link_loads_int) > 0 else 0
+        max_load_ext = np.max(list(link_loads_ext.values())) if len(link_loads_ext) > 0 else 0
+        min_load_ext = np.min(list(link_loads_ext.values())) if len(link_loads_ext) > 0 else 0
         return Tree(
             {
                 "MEAN_INTERNAL": mean_load_int,
                 "MEAN_EXTERNAL": mean_load_ext,
+                "NSD_INTERNAL": sd_load_int / (max_load_int - min_load_int),
+                "NSD_EXTERNAL": sd_load_ext / (max_load_ext - min_load_ext),
                 "PER_LINK_INTERNAL": link_loads_int,
                 "PER_LINK_EXTERNAL": link_loads_ext,
             }
@@ -327,7 +345,7 @@ class LatencyCollector(DataCollector):
     """Data collector measuring latency, i.e. the delay taken to delivery a
     content.
     """
-
+    PACKET_IN_DEFAULT_LATENCY = 3  # 3 ms for packet in
     def __init__(self, view, cdf=False):
         """Constructor
 
@@ -340,7 +358,8 @@ class LatencyCollector(DataCollector):
         """
         self.cdf = cdf
         self.view = view
-        self.req_latency = 0.0
+        self.sess_latency = 0.0
+        self.pkt_in_latency = 0.0
         self.sess_count = 0
         self.latency = 0.0
         if cdf:
@@ -355,6 +374,11 @@ class LatencyCollector(DataCollector):
     def request_hop(self, u, v, main_path=True):
         if main_path:
             self.sess_latency += self.view.link_delay(u, v)
+
+    def packet_in(self, content):
+        pkt_in_latency = self.PACKET_IN_DEFAULT_LATENCY + random.uniform(0, 1)
+        self.pkt_in_latency += pkt_in_latency
+        self.sess_latency += pkt_in_latency
 
     @inheritdoc(DataCollector)
     def content_hop(self, u, v, main_path=True):
@@ -371,7 +395,8 @@ class LatencyCollector(DataCollector):
 
     @inheritdoc(DataCollector)
     def results(self):
-        results = Tree({"MEAN": self.latency / self.sess_count})
+        results = Tree({"MEAN": self.latency / self.sess_count,
+                        "PACKET_IN_Latency": self.pkt_in_latency})
         if self.cdf:
             results["CDF"] = cdf(self.latency_data)
         return results
@@ -669,8 +694,8 @@ class PacketInCollector(DataCollector):
         return results
 
 
-@register_data_collector("SEANRS_DUMMY")
-class SEANRS_DUMMY_Collector(DataCollector):
+@register_data_collector("LEVEL_HIT")
+class LEVEL_HIT_Collector(DataCollector):
     """
     collect statistic data for SEANRS.
     """
@@ -684,6 +709,9 @@ class SEANRS_DUMMY_Collector(DataCollector):
             The network view instance
         """
         super().__init__(view, **params)
+        self.resolve_l1 = 0
+        self.resolve_l2 = 0
+        self.resolve_l3 = 0
         self.resolve_ctrl = 0
         self.resolve_ibgn = 0
         self.resolve_ebgn = 0
@@ -703,6 +731,12 @@ class SEANRS_DUMMY_Collector(DataCollector):
             self.resolve_ibgn += 1
         elif area == "ebgn":
             self.resolve_ebgn += 1
+        elif area == "l1":
+            self.resolve_l1 += 1
+        elif area == "l2":
+            self.resolve_l2 += 1
+        elif area == "l3":
+            self.resolve_l3 += 1
 
     @inheritdoc(DataCollector)
     def end_session(self, success=True):
@@ -711,12 +745,22 @@ class SEANRS_DUMMY_Collector(DataCollector):
 
     @inheritdoc(DataCollector)
     def results(self):
-        results = Tree(
-            {
-                "TOTAL_REQUEST": sum(self.total_request.values()),
-                "RESOLVE_CTRL": self.resolve_ctrl,
-                "RESOLVE_IBGN": self.resolve_ibgn,
-                "RESOLVE_EBGN": self.resolve_ebgn,
-            }
-        )
+        if self.resolve_ctrl != 0:
+            results = Tree(
+                {
+                    "TOTAL_REQUEST": sum(self.total_request.values()),
+                    "RESOLVE_CTRL": self.resolve_ctrl,
+                    "RESOLVE_IBGN": self.resolve_ibgn,
+                    "RESOLVE_EBGN": self.resolve_ebgn,
+                }
+            )
+        else:
+            results = Tree(
+                {
+                    "TOTAL_REQUEST": sum(self.total_request.values()),
+                    "RESOLVE_L1": self.resolve_l1,
+                    "RESOLVE_L2": self.resolve_l2,
+                    "RESOLVE_L3": self.resolve_l3,
+                }
+            )
         return results

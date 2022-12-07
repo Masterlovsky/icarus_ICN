@@ -40,10 +40,9 @@ def uniform_content_placement(topology, contents, seed=None):
     ----------
     topology : Topology
         The topology object
-    contents : iterable
-        Iterable of content objects
-    source_nodes : list
-        List of nodes of the topology which are content sources
+    contents : Iterable of content objects
+    seed : any hashable type, optional
+        The seed to be used for random number generation
 
     Returns
     -------
@@ -72,7 +71,7 @@ def weighted_content_placement(topology, contents, source_weights, seed=None):
      ----------
      topology : Topology
          The topology object
-    contents : iterable
+     contents : iterable
          Iterable of content objects
      source_weights : dict
          Dict mapping nodes nodes of the topology which are content sources and

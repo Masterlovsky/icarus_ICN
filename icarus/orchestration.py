@@ -243,6 +243,7 @@ def run_scenario(settings, params, curr_exp, n_exp):
             return None
         topology = TOPOLOGY_FACTORY[topology_name](**topology_spec)
 
+        # Set workload
         workload_spec = tree["workload"]
         workload_name = workload_spec.pop("name")
         if workload_name not in WORKLOAD:
@@ -312,6 +313,7 @@ def run_scenario(settings, params, curr_exp, n_exp):
 
         collectors = {m: {} for m in metrics}
         # collectors["LATENCY"]["cdf"] = True
+        collectors["LINK_LOAD"]["content_size"] = 0
         logger.info("Experiment %d/%d | Start simulation", curr_exp, n_exp)
         results = exec_experiment(
             topology, workload, netconf, strategy, cache_policy, collectors
