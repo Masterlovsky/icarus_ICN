@@ -712,25 +712,44 @@ class LEVEL_HIT_Collector(DataCollector):
         self.resolve_l1 = 0
         self.resolve_l2 = 0
         self.resolve_l3 = 0
+        self.resolve_cache = 0
         self.resolve_ctrl = 0
         self.resolve_ibgn = 0
         self.resolve_ebgn = 0
         self.total_request = {}  # content: count
+        self.cache_res_hit = collections.Counter()  # controller: count
+        self.controller_res_hit = collections.Counter()  # controller: count
+        self.bgn_resolve_hit = collections.Counter()  # bgn: count
+        self.t_start = -1
+        self.t_end = 1
 
     @inheritdoc(DataCollector)
     def start_session(self, timestamp, receiver, content):
         self.total_request[content] = self.total_request.get(content, 0) + 1
+        if self.t_start < 0:
+            self.t_start = timestamp
+        self.t_end = timestamp
 
-    def resolve(self, content, area: str):
+    def resolve(self, node, area: str):
         """
         Calculate the specific location where statistics content is parsed
         """
-        if area == "ctrl":
+        if area == "cache":
+            self.resolve_cache += 1
+            self.cache_res_hit[str(node)] += 1
+        elif area == "ctrl":
             self.resolve_ctrl += 1
+            # node is switch, so we need to get the controller
+            _ctrln = self.view.get_ctrln(node)
+            _asn = self.view.get_asn(node)
+            _ctrl_str = str(_asn) + "@" + str(_ctrln)
+            self.controller_res_hit[_ctrl_str] += 1
         elif area == "ibgn":
             self.resolve_ibgn += 1
+            self.bgn_resolve_hit[str(node)] += 1
         elif area == "ebgn":
             self.resolve_ebgn += 1
+            self.bgn_resolve_hit[str(node)] += 1
         elif area == "l1":
             self.resolve_l1 += 1
         elif area == "l2":
@@ -745,13 +764,21 @@ class LEVEL_HIT_Collector(DataCollector):
 
     @inheritdoc(DataCollector)
     def results(self):
+        duration = self.t_end - self.t_start
         if self.resolve_ctrl != 0:
             results = Tree(
                 {
                     "TOTAL_REQUEST": sum(self.total_request.values()),
+                    "RESOLVE_CACHE": self.resolve_cache,
                     "RESOLVE_CTRL": self.resolve_ctrl,
                     "RESOLVE_IBGN": self.resolve_ibgn,
                     "RESOLVE_EBGN": self.resolve_ebgn,
+                    "CONCURRENCY_CTRL_MAX_KEY": max(self.controller_res_hit, key=self.controller_res_hit.get),
+                    "CONCURRENCY_CTRL_MAX_VAL": max(self.controller_res_hit.values()) / duration,
+                    "CONCURRENCY_CTRL_MEAN": sum(self.controller_res_hit.values()) / len(self.controller_res_hit) / duration,
+                    "CONCURRENCY_BGN_MAX_KEY": max(self.bgn_resolve_hit, key=self.bgn_resolve_hit.get),
+                    "CONCURRENCY_BGN_MAX_VAL": max(self.bgn_resolve_hit.values()) / duration,
+                    "CONCURRENCY_BGN_MEAN": sum(self.bgn_resolve_hit.values()) / len(self.bgn_resolve_hit) / duration,
                 }
             )
         else:

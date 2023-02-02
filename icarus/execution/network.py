@@ -1049,7 +1049,7 @@ class SEANRSModel(NetworkModel):
         self.ctrl_num = {}
         # BGN node of each as, bgn_nodes[as_id] = BGN_node
         self.bgn_nodes = defaultdict(set)
-
+        logger.info("Set function of DINNRS controller and BGN ...")
         for node in topology.nodes():
             stack_name, stack_props = fnss.get_stack(topology, node)
             self.as_num[node] = stack_props['asn']
@@ -1074,6 +1074,7 @@ class SEANRSModel(NetworkModel):
             else:
                 logger.warning("[SEANRS] Unknown stack name: %s", stack_name)
         # ! register content to MDCF of BGN node
+        logger.info("Register content to MDCF of BGN node ...")
         for node in self.source_node.keys():
             asn = self.as_num[node]
             for content in self.source_node[node]:
@@ -1092,6 +1093,8 @@ class SEANRSModel(NetworkModel):
                 mcf = self.MCFS[ibgn]
                 mask = mcf.encode_mask("int", asn)
                 mcf.insert(str(content), mask=mask)
+
+        logger.info("SEANet DINNRS model init success!")
 
 
 class MDHTModel(NetworkModel):

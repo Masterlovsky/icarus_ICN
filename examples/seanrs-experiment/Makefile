@@ -1,6 +1,6 @@
 CONFIG_FILE ?= config.py
 RESULTS_FILE ?= results.pickle
-PRINT_FILE ?= results/load_1000.txt
+PRINT_FILE ?= results/pps_10e8_10x100.txt
 
 .PHONY: check_installed run clean
 

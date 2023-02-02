@@ -314,6 +314,7 @@ def run_scenario(settings, params, curr_exp, n_exp):
         collectors = {m: {} for m in metrics}
         # collectors["LATENCY"]["cdf"] = True
         collectors["LINK_LOAD"]["content_size"] = 0
+        collectors["LINK_LOAD"]["req_size"] = 1  # set req_size to 1 to statistics pps
         logger.info("Experiment %d/%d | Start simulation", curr_exp, n_exp)
         results = exec_experiment(
             topology, workload, netconf, strategy, cache_policy, collectors

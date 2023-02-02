@@ -43,6 +43,10 @@ def dump_flow_data(input_file: str = "results.pickle", output_file: str = "flow_
                 link_load) + "\n")
 
     # print("Node loads: {}".format(node_loads))
+    # print node max load and min load
+    max_load = max(node_loads.values())
+    min_load = min(node_loads.values())
+    print("Max load: {} / min load: {}".format(max_load, min_load))
 
 
 if __name__ == '__main__':

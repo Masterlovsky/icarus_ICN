@@ -36,7 +36,7 @@ DATA_COLLECTORS = ["CACHE_HIT_RATIO", "LINK_LOAD", "LATENCY", "PACKET_IN", "LEVE
 # DATA_COLLECTORS = ["LINK_LOAD"]
 
 # Number of requests per second (over the whole network)
-REQ_RATE = 1000.0
+REQ_RATE = 10**8
 # ALPHA = [0.6, 0.8, 1.0]
 # Queue of experiments
 EXPERIMENT_QUEUE = deque()
@@ -47,13 +47,13 @@ experiment = Tree()
 # Set topology
 # experiment["topology"]["name"] = "SEANRS_SIMPLE"
 experiment["topology"]["name"] = "SEANRS"
-experiment["topology"]["scale"] = "5x20"
+experiment["topology"]["scale"] = "10x100"
 
 # Set workload
 experiment["workload"] = {
     "name": "STATIONARY",
     "n_contents": 10 ** 4,
-    "n_warmup": 3 * 10 ** 3,
+    "n_warmup": 5 * 10 ** 3,
     "n_measured": 5 * 10 ** 3,
     "alpha": 0.85,
     "rate": REQ_RATE,

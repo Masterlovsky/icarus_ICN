@@ -47,12 +47,14 @@ class SEANRS(Strategy):
             The node(actually ip address) to route the request to
         """
         content = self.controller.session['content']
-        self.controller.resolve(content, "ctrl")
         # Check whether the content is in the cache
         if self.view.has_cache(sw) and self.controller.get_content(sw):
+            self.controller.resolve(sw, "cache")
             # todo: this method will be changed to the content_location
-            return self.view.content_source(content)
+            dst_n = self.view.content_source(content)
+            return dst_n
         # Check whether the content is in the sdn controller
+        self.controller.resolve(sw, "ctrl")
         self.controller.packet_in(content)
         dst_n = self.view.get_dst_from_controller(
             self.view.get_asn(sw), self.view.get_ctrln(sw), content)
@@ -61,7 +63,7 @@ class SEANRS(Strategy):
             # Update the cache of the switch
             if self.view.has_cache(sw):
                 self.controller.put_content(sw)
-            return dst_n
+        return dst_n
 
     def resolve_bgn(self, bgn, type="ibgn"):
         """Resolve a content request in the bgp domain
@@ -104,7 +106,7 @@ class SEANRS(Strategy):
         bgn_next = None
 
         if type == "ibgn":
-            self.controller.resolve(content, "ibgn")
+            self.controller.resolve(bgn, "ibgn")
             if mcf.contains(content):
                 # if the content fingerprint is in the mcf, get the set mask from the mcf
                 area, idx_l = mcf.decode_mask(mcf.get(content))
@@ -116,7 +118,7 @@ class SEANRS(Strategy):
                         if get_nearest_sw(bgn, sw_l):
                             n_sw_list.append(get_nearest_sw(bgn, sw_l))
         elif type == "ebgn":
-            self.controller.resolve(content, "ebgn")
+            self.controller.resolve(bgn, "ebgn")
             if mcf.contains(content):
                 area, idx_l = mcf.decode_mask(mcf.get(content))
                 if area == 'bit':
@@ -135,7 +137,7 @@ class SEANRS(Strategy):
                     mcf_next = self.view.get_mcf(bgn_next)
                     # route to bgn_next
                     self.controller.forward_request_path(bgn, bgn_next)
-                    self.controller.resolve(content, "ibgn")
+                    self.controller.resolve(bgn_next, "ibgn")
                     area_next, idx_l_next = mcf.decode_mask(mcf_next.get(content))
                     if area_next == 'bit':
                         for idx in idx_l_next:
@@ -204,7 +206,6 @@ class SEANRS(Strategy):
         inter_bgn = self.view.get_bgn_conhash(str(content))
         self.controller.forward_request_path(bgn, inter_bgn)
         nearest_sw_list, bgn_nxt = self.resolve_bgn(inter_bgn, type="ebgn")
-        # print("222 content:", content, "nearest_sw_list: ", nearest_sw_list)
         if len(nearest_sw_list) != 0:
             for sw in nearest_sw_list:
                 if bgn_nxt:
