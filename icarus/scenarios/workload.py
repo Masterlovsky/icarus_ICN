@@ -19,9 +19,11 @@ all content identifiers. This is needed for content placement.
 """
 import random
 import csv
+import collections
 
 import fnss
 import networkx as nx
+from tqdm import tqdm
 
 from icarus.tools import TruncatedZipfDist
 from icarus.registry import register_workload
@@ -40,6 +42,13 @@ def get_nodes_with_type(topology, ntype="receiver"):
     Return the nodes of a topology, which are of a given type(receivers or source).
     """
     return [v for v in topology if topology.node[v]["stack"][0] == ntype]
+
+
+def get_contents(topology, v):
+    """
+    Return the contents in a source node.
+    """
+    return topology.node[v]["stack"][1].get("contents", set())
 
 
 @register_workload("STATIONARY")
@@ -441,6 +450,8 @@ class LPWorkload:
         The number of content object
     alpha : float
         The Zipf alpha parameter
+    lp : float
+        The level probability
     beta : float, optional
         Parameter indicating
     rate : float, optional
@@ -472,8 +483,8 @@ class LPWorkload:
             seed=None,
             **kwargs
     ):
-        if lp < 0:
-            raise ValueError("lp must be positive")
+        if not 0 < lp < 1:
+            raise ValueError("lp must be in (0, 1)")
         if beta < 0:
             raise ValueError("beta must be positive")
         self.topology = topology
@@ -482,7 +493,6 @@ class LPWorkload:
         self.n_contents = n_contents
         self.contents = range(1, n_contents + 1)
         self.lp = lp
-        self.zipf = TruncatedZipfDist(alpha, n_contents)
         self.rate = rate
         self.n_warmup = n_warmup
         self.n_measured = n_measured
@@ -497,6 +507,18 @@ class LPWorkload:
             )
             self.receiver_dist = TruncatedZipfDist(beta, len(self.receivers))
 
+        #  create a dict to store each level's zipf distribution for each receiver.
+        self.zipf_dict = collections.defaultdict(list)
+        self.receiver2contents_dict = collections.defaultdict(list)
+        for receiver in tqdm(self.receivers, desc="Creating zipf distributions for each receiver: "):
+            cont_ctrl, cont_mng = self.get_same_area_contents(receiver)
+            cont_inter = set(self.contents) - cont_ctrl - cont_mng
+            self.receiver2contents_dict[receiver] = [list(cont_ctrl), list(cont_mng), list(cont_inter)]
+            zipf_ctrl = TruncatedZipfDist(alpha, len(cont_ctrl)) if cont_ctrl else None
+            zipf_mng = TruncatedZipfDist(alpha, len(cont_mng)) if cont_mng else None
+            zipf_inter = TruncatedZipfDist(alpha, len(cont_inter)) if cont_inter else None
+            self.zipf_dict[receiver] = [zipf_ctrl, zipf_mng, zipf_inter]
+
     def __iter__(self):
         req_counter = 0
         t_event = 0.0
@@ -507,10 +529,42 @@ class LPWorkload:
                 receiver = random.choice(self.receivers)
             else:
                 receiver = self.receivers[self.receiver_dist.rv() - 1]
-
-            content = int(self.zipf.rv())
+            # generate a random value in [0, 1]
+            p = random.random()
+            if p < self.lp:
+                contents = self.receiver2contents_dict[receiver][0]
+                if not contents:
+                    continue
+                content = contents[self.zipf_dict[receiver][0].rv() - 1]
+            elif p < self.lp + self.lp * (1 - self.lp):
+                contents = self.receiver2contents_dict[receiver][1]
+                if not contents:
+                    continue
+                content = self.receiver2contents_dict[receiver][1][self.zipf_dict[receiver][1].rv() - 1]
+            else:
+                content = self.receiver2contents_dict[receiver][2][self.zipf_dict[receiver][2].rv() - 1]
             log = req_counter >= self.n_warmup
             event = {"receiver": receiver, "content": content, "log": log}
             yield (t_event, event)
             req_counter += 1
         return
+
+    def get_same_area_contents(self, v):
+        """
+        Get all content in the same control domain and management domain with the target node.
+        :param v: target node
+        :return: (set, set): contents in the same control domain, contents in the same management domain
+        """
+        contents_ctrl = set()
+        contents_manage = set()
+        ctrl_domain_v = self.topology.node[v]["stack"][1]["ctrl"]
+        asn_v = self.topology.node[v]["stack"][1]["asn"]
+        for u in self.topology.nodes():
+            if self.topology.node[u]["stack"][0] != "source":
+                continue
+            if self.topology.node[u]["stack"][1]["asn"] == asn_v:
+                if self.topology.node[u]["stack"][1]["ctrl"] == ctrl_domain_v:
+                    contents_ctrl |= get_contents(self.topology, u)
+                else:
+                    contents_manage |= get_contents(self.topology, u)
+        return contents_ctrl, contents_manage

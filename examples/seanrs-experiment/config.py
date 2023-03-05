@@ -51,18 +51,19 @@ experiment["topology"]["scale"] = "10x100"
 
 # Set workload
 experiment["workload"] = {
-    "name": "STATIONARY",
+    "name": "LEVEL_PROBABILITY",
     "n_contents": 10 ** 4,
-    "n_warmup": 5 * 10 ** 3,
-    "n_measured": 5 * 10 ** 3,
+    "n_warmup": 5 * 10 ** 4,
+    "n_measured": 5 * 10 ** 4,
     "alpha": 0.85,
+    "lp": 0.8,
     "rate": REQ_RATE,
     # "seed": 1234,
 }
 
 # Set cache placement
 experiment["cache_placement"]["name"] = "UNIFORM"
-experiment["cache_placement"]["network_cache"] = 1.0
+experiment["cache_placement"]["network_cache"] = 10.0
 
 # Set content placement
 experiment["content_placement"]["name"] = "UNIFORM"

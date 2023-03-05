@@ -18,6 +18,7 @@ import logging
 import mmh3
 import networkx as nx
 import fnss
+from tqdm import tqdm
 
 from icarus.registry import CACHE_POLICY
 from icarus.util import iround, path_links
@@ -492,11 +493,13 @@ class NetworkModel:
             )
 
         # Shortest paths of the network
+        logger.info("Calculate all pairs of dijkstra_path...")
         self.shortest_path = (
             dict(shortest_path)
             if shortest_path is not None
             else symmetrify_paths(dict(nx.all_pairs_dijkstra_path(topology)))
         )
+        logger.info("Calculate all pairs of dijkstra_path done!")
 
         # Network topology
         self.topology = topology
@@ -1029,6 +1032,7 @@ class SEANRSModel(NetworkModel):
     """
 
     def __init__(self, topology, cache_policy, shortest_path=None):
+        logger.info("Initializing SEANRS Network Model...")
         super().__init__(topology, cache_policy, shortest_path)
         # controllers of global specific name space
         # sdncontrollers[as_id][ctrl_id] = {content: node}
@@ -1049,13 +1053,14 @@ class SEANRSModel(NetworkModel):
         self.ctrl_num = {}
         # BGN node of each as, bgn_nodes[as_id] = BGN_node
         self.bgn_nodes = defaultdict(set)
-        logger.info("Set function of DINNRS controller and BGN ...")
-        for node in topology.nodes():
+        # logger.info("Set function of DINNRS controller and BGN ...")
+        for node in tqdm(topology.nodes(), desc="[Network] Set controllers and BGNs: "):
             stack_name, stack_props = fnss.get_stack(topology, node)
             self.as_num[node] = stack_props['asn']
             if stack_name == "receiver":
                 self.access_switches[node] = topology.node[stack_props["sw"]]
             elif stack_name == "bgn":
+                # todo: perhaps not all bgn nodes are members of the intermediary domain
                 self.conhash.add_node(node, conf=stack_props)
                 self.bgn_nodes[stack_props['asn']].add(node)
                 # ! set MDCF of each BGN node, capacity default to 10000
@@ -1074,8 +1079,8 @@ class SEANRSModel(NetworkModel):
             else:
                 logger.warning("[SEANRS] Unknown stack name: %s", stack_name)
         # ! register content to MDCF of BGN node
-        logger.info("Register content to MDCF of BGN node ...")
-        for node in self.source_node.keys():
+        # logger.info("Register content to MDCF of BGN node ...")
+        for node in tqdm(self.source_node.keys(), desc="[Network] Register content to MDCF: "):
             asn = self.as_num[node]
             for content in self.source_node[node]:
                 # * ----- intra-domain -----

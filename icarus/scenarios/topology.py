@@ -14,6 +14,7 @@ A valid ICN topology must have the following attributes:
 
 from os import path
 import logging
+from tqdm import tqdm
 
 import networkx as nx
 import fnss
@@ -1010,6 +1011,7 @@ def topology_seanrs(**kwargs) -> SEANRS_Topology:
     topology = fnss.parse_brite(
         path.join(TOPOLOGY_RESOURCES_DIR, topo_path + "seanrs" + scale + "_extend.brite")
     ).to_undirected()
+    logger.info("Read topology from file: %s done!", topo_path + "seanrs" + scale + "_extend.brite")
     topology = largest_connected_component_subgraph(IcnTopology(topology))
     topology.graph["icr_candidates"] = set()
     # read node_type file and add node type
@@ -1021,6 +1023,7 @@ def topology_seanrs(**kwargs) -> SEANRS_Topology:
             for node in nodes:
                 if node != "":
                     topology.nodes[int(node)]["type"] = ntype
+    logger.info("Read node type from file: %s done!", topo_path + "node_type" + scale + ".txt")
     # read layout file and add ctrl_number
     f_layout = path.join(TOPOLOGY_RESOURCES_DIR, topo_path + "layout" + scale + ".txt")
     ctrl_dict = {}
@@ -1031,6 +1034,7 @@ def topology_seanrs(**kwargs) -> SEANRS_Topology:
                 raise RuntimeError("Wrong layout file format.")
             node, ctrl = _l[0], _l[-1]
             ctrl_dict[int(node)] = int(ctrl)
+    logger.info("Read layout from file: %s done!", topo_path + "layout" + scale + ".txt")
     # add stack
     for node in topology.nodes:
         asn = topology.nodes[node].get("AS", 0)
@@ -1048,11 +1052,12 @@ def topology_seanrs(**kwargs) -> SEANRS_Topology:
         else:
             topology.nodes[node]["type"] = "router"
             fnss.add_stack(topology, node, "router", {"asn": asn + 1, "ctrl": ctrl_dict[node]})
+    logger.info("Add stack done!")
     # change link type from E_AS, E_RT to "external", "internal"
     for u, v in topology.edges:
         if topology.edges[u, v]["type"] == "E_AS":
             topology.edges[u, v]["type"] = "external"
         elif topology.edges[u, v]["type"] == "E_RT":
             topology.edges[u, v]["type"] = "internal"
-
+    logger.info("Change link type done!")
     return SEANRS_Topology(topology)

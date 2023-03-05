@@ -25,9 +25,7 @@ from icarus.registry import (
 from icarus.results import ResultSet
 from icarus.util import SequenceNumber, timestr
 
-
 __all__ = ["Orchestrator", "run_scenario"]
-
 
 logger = logging.getLogger("orchestration")
 
@@ -233,7 +231,7 @@ def run_scenario(settings, params, curr_exp, n_exp):
         # Copy parameters so that they can be manipulated
         tree = copy.deepcopy(params)
 
-        # Set topology
+        # * 1. Set topology
         topology_spec = tree["topology"]
         topology_name = topology_spec.pop("name")
         if topology_name not in TOPOLOGY_FACTORY:
@@ -243,17 +241,17 @@ def run_scenario(settings, params, curr_exp, n_exp):
             return None
         topology = TOPOLOGY_FACTORY[topology_name](**topology_spec)
 
-        # Set workload
+        # * 2. Get workload parameters
         workload_spec = tree["workload"]
         workload_name = workload_spec.pop("name")
+        workload_n_contents = workload_spec["n_contents"]
         if workload_name not in WORKLOAD:
             logger.error(
                 "No workload implementation named %s was found." % workload_name
             )
             return None
-        workload = WORKLOAD[workload_name](topology, **workload_spec)
 
-        # Assign caches to nodes
+        # * 3. Assign caches to nodes
         if "cache_placement" in tree:
             cachepl_spec = tree["cache_placement"]
             cachepl_name = cachepl_spec.pop("name")
@@ -263,10 +261,11 @@ def run_scenario(settings, params, curr_exp, n_exp):
             network_cache = cachepl_spec.pop("network_cache")
             # Cache budget is the cumulative number of cache entries across
             # the whole network
-            cachepl_spec["cache_budget"] = workload.n_contents * network_cache
+            cachepl_spec["cache_budget"] = workload_n_contents * network_cache
             CACHE_PLACEMENT[cachepl_name](topology, **cachepl_spec)
+            logger.info("Assign caches to nodes done.")
 
-        # Assign contents to sources
+        # * 4. Assign contents to sources
         # If there are many contents, after doing this, performing operations
         # requiring a topology deep copy, i.e. to_directed/undirected, will
         # take long.
@@ -277,9 +276,14 @@ def run_scenario(settings, params, curr_exp, n_exp):
                 "No content placement implementation named %s was found." % contpl_name
             )
             return None
-        CONTENT_PLACEMENT[contpl_name](topology, workload.contents, **contpl_spec)
+        content_placement = CONTENT_PLACEMENT[contpl_name](topology, range(1, workload_n_contents + 1), **contpl_spec)
+        logger.info("Assign contents to sources done.")
 
-        # caching and routing strategy definition
+        # * 5. Set workload
+        workload = WORKLOAD[workload_name](topology, **workload_spec)
+        logger.info("Workload set.")
+
+        # * 6. Caching and routing strategy definition
         strategy = tree["strategy"]
         if strategy["name"] not in STRATEGY:
             logger.error(
@@ -287,18 +291,19 @@ def run_scenario(settings, params, curr_exp, n_exp):
             )
             return None
 
-        # cache eviction policy definition
+        # * 7. cache eviction policy definition
         cache_policy = tree["cache_policy"]
         if cache_policy["name"] not in CACHE_POLICY:
             logger.error(
                 "No implementation of cache policy %s was found." % cache_policy["name"]
             )
             return None
+        logger.info("Strategy and Cache policy set.")
 
-        # Configuration parameters of network model
+        # * 8. Set configuration parameters of network model
         netconf = tree["netconf"]
 
-        # Text description of the scenario run to print on screen
+        # * 9. Text description of the scenario run to print on screen
         scenario = tree["desc"] if "desc" in tree else "Description N/A"
 
         logger.info(
@@ -311,10 +316,13 @@ def run_scenario(settings, params, curr_exp, n_exp):
             )
             return None
 
+        # * 10. Set collectors
         collectors = {m: {} for m in metrics}
         # collectors["LATENCY"]["cdf"] = True
         collectors["LINK_LOAD"]["content_size"] = 0
         collectors["LINK_LOAD"]["req_size"] = 1  # set req_size to 1 to statistics pps
+
+        # * 11.  ==== Run experiment ====
         logger.info("Experiment %d/%d | Start simulation", curr_exp, n_exp)
         results = exec_experiment(
             topology, workload, netconf, strategy, cache_policy, collectors

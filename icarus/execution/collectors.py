@@ -720,6 +720,8 @@ class LEVEL_HIT_Collector(DataCollector):
         self.cache_res_hit = collections.Counter()  # controller: count
         self.controller_res_hit = collections.Counter()  # controller: count
         self.bgn_resolve_hit = collections.Counter()  # bgn: count
+        self.ibgn_res_hit = collections.Counter()  # bgn: count
+        self.ebgn_res_hit = collections.Counter()  # bgn: count
         self.t_start = -1
         self.t_end = 1
 
@@ -747,9 +749,11 @@ class LEVEL_HIT_Collector(DataCollector):
         elif area == "ibgn":
             self.resolve_ibgn += 1
             self.bgn_resolve_hit[str(node)] += 1
+            self.ibgn_res_hit[str(node)] += 1
         elif area == "ebgn":
             self.resolve_ebgn += 1
             self.bgn_resolve_hit[str(node)] += 1
+            self.ebgn_res_hit[str(node)] += 1
         elif area == "l1":
             self.resolve_l1 += 1
         elif area == "l2":
@@ -773,12 +777,16 @@ class LEVEL_HIT_Collector(DataCollector):
                     "RESOLVE_CTRL": self.resolve_ctrl,
                     "RESOLVE_IBGN": self.resolve_ibgn,
                     "RESOLVE_EBGN": self.resolve_ebgn,
-                    "CONCURRENCY_CTRL_MAX_KEY": max(self.controller_res_hit, key=self.controller_res_hit.get),
+                    # "CONCURRENCY_CTRL_MAX_KEY": max(self.controller_res_hit, key=self.controller_res_hit.get),
                     "CONCURRENCY_CTRL_MAX_VAL": max(self.controller_res_hit.values()) / duration,
                     "CONCURRENCY_CTRL_MEAN": sum(self.controller_res_hit.values()) / len(self.controller_res_hit) / duration,
-                    "CONCURRENCY_BGN_MAX_KEY": max(self.bgn_resolve_hit, key=self.bgn_resolve_hit.get),
+                    # "CONCURRENCY_BGN_MAX_KEY": max(self.bgn_resolve_hit, key=self.bgn_resolve_hit.get),
                     "CONCURRENCY_BGN_MAX_VAL": max(self.bgn_resolve_hit.values()) / duration,
                     "CONCURRENCY_BGN_MEAN": sum(self.bgn_resolve_hit.values()) / len(self.bgn_resolve_hit) / duration,
+                    "CONCURRENCY_IBGN_MAX_VAL": max(self.ibgn_res_hit.values()) / duration,
+                    "CONCURRENCY_IBGN_MEAN": sum(self.ibgn_res_hit.values()) / len(self.ibgn_res_hit) / duration,
+                    "CONCURRENCY_EBGN_MAX_VAL": max(self.ebgn_res_hit.values()) / duration,
+                    "CONCURRENCY_EBGN_MEAN": sum(self.ebgn_res_hit.values()) / len(self.ebgn_res_hit) / duration,
                 }
             )
         else:

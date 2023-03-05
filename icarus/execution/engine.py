@@ -5,6 +5,8 @@ experiments needs to be run, instantiates all the required classes and executes
 the experiment by iterating through the event provided by an event generator
 and providing them to a strategy instance.
 """
+from tqdm import tqdm
+
 from icarus.execution import (
     NetworkModel,
     SEANRSModel,
@@ -72,6 +74,6 @@ def exec_experiment(topology, workload, netconf, strategy, cache_policy, collect
     strategy_args = {k: v for k, v in strategy.items() if k != "name"}
     strategy_inst = STRATEGY[strategy_name](view, controller, **strategy_args)
 
-    for time, event in workload:
+    for time, event in tqdm(workload, desc="Simulation"):
         strategy_inst.process_event(time, **event)
     return collector.results()

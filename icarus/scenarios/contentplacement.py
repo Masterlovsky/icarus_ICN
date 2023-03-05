@@ -60,6 +60,7 @@ def uniform_content_placement(topology, contents, seed=None):
     for c in contents:
         content_placement[random.choice(source_nodes)].add(c)
     apply_content_placement(content_placement, topology)
+    return content_placement
 
 
 @register_content_placement("WEIGHTED")
@@ -94,3 +95,4 @@ def weighted_content_placement(topology, contents, source_weights, seed=None):
     for c in contents:
         content_placement[random_from_pdf(source_pdf)].add(c)
     apply_content_placement(content_placement, topology)
+    return content_placement

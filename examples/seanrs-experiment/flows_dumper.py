@@ -13,6 +13,7 @@ from icarus.results.readwrite import *
 def dump_flow_data(input_file: str = "results.pickle", output_file: str = "flow_data.txt"):
     """
     Dump the flows data from result files
+    :output_file: the output file name
     :param input_file: the input file path
     :return: None
     """
