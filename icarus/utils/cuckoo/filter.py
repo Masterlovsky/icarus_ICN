@@ -816,7 +816,8 @@ class MarkedCuckooFilter(CuckooTemplate):
             int_idx = int(mask[self.bit_tag_len:self.bit_tag_len + self.int_tag_len].to01(), 2)
             return "int", [int_idx]
         else:
-            raise ValueError("Value get error! The bit block is empty")
+            print("Warning! Filter value get error! The bit block is empty")
+            return "int", []
 
     def _include(self, fingerprint, index):
         """

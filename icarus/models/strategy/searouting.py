@@ -151,7 +151,7 @@ class SEANRS(Strategy):
                                 n_sw_list.append(get_nearest_sw(bgn_next, sw_l))
                     else:
                         logger.warning("False positive in the ebgn{}".format(bgn))
-                        return []
+                        return [], []
 
         return n_sw_list, bgn_next
 
