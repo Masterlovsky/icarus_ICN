@@ -74,6 +74,6 @@ def exec_experiment(topology, workload, netconf, strategy, cache_policy, collect
     strategy_args = {k: v for k, v in strategy.items() if k != "name"}
     strategy_inst = STRATEGY[strategy_name](view, controller, **strategy_args)
 
-    for time, event in tqdm(workload, desc="Simulation"):
+    for time, event in tqdm(workload, desc="Processing request: "):
         strategy_inst.process_event(time, **event)
     return collector.results()

@@ -530,7 +530,7 @@ class NetworkModel:
                 if "cache_size" in stack_props:
                     cache_size[node] = stack_props["cache_size"]
             elif stack_name == "source":
-                contents = stack_props["contents"]
+                contents = stack_props.get("contents", [])
                 self.source_node[node] = contents
                 for content in contents:
                     self.content_source[content] = node
