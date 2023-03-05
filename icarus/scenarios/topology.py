@@ -1016,6 +1016,7 @@ def topology_seanrs(**kwargs) -> SEANRS_Topology:
     topology.graph["icr_candidates"] = set()
     # read node_type file and add node type
     f_node_type = path.join(TOPOLOGY_RESOURCES_DIR, topo_path + "node_type" + scale + ".txt")
+    src = recv = sw = bgn = 0
     with open(f_node_type, "r") as f:
         for line in f:
             ntype, nodes = line.split(":")
@@ -1023,7 +1024,16 @@ def topology_seanrs(**kwargs) -> SEANRS_Topology:
             for node in nodes:
                 if node != "":
                     topology.nodes[int(node)]["type"] = ntype
+                    if ntype == "source":
+                        src += 1
+                    elif ntype == "receiver":
+                        recv += 1
+                    elif ntype == "switch":
+                        sw += 1
+                    elif ntype == "bgn":
+                        bgn += 1
     logger.info("Read node type from file: %s done!", topo_path + "node_type" + scale + ".txt")
+    logger.info(">> source: %d, receiver: %d, switch: %d, bgn: %d <<", src, recv, sw, bgn)
     # read layout file and add ctrl_number
     f_layout = path.join(TOPOLOGY_RESOURCES_DIR, topo_path + "layout" + scale + ".txt")
     ctrl_dict = {}
