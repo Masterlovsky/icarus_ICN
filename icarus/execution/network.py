@@ -524,7 +524,7 @@ class NetworkModel:
                 self.link_delay[(v, u)] = delay
 
         cache_size = {}
-        for node in topology.nodes():
+        for node in tqdm(topology.nodes(), desc="Mapping content sources to nodes: "):
             stack_name, stack_props = fnss.get_stack(topology, node)
             if stack_name == "router" or stack_name == "switch":
                 if "cache_size" in stack_props:
