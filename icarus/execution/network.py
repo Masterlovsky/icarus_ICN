@@ -1071,7 +1071,7 @@ class SEANRSModel(NetworkModel):
             elif stack_name == "source":
                 self.ctrl_num[node] = stack_props["ctrl"]
                 # ! register content to sdn controller
-                for content in stack_props["contents"]:
+                for content in stack_props.get("contents", []):
                     self.sdncontrollers[stack_props['asn']][stack_props['ctrl']][content] = node
             elif stack_name == "router":
                 # todo: router is not considered in this version
