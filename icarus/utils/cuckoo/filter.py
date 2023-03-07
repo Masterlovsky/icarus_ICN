@@ -633,15 +633,15 @@ class MarkedCuckooFilter(CuckooTemplate):
 
         bit_tag_len : The length of the bit array tag.  Defaults to 16.
 
-        int_tag_flag : The flag of the integer tag which can be used to identify
-            the AS number. Defaults to True.
+        int_tag_len : The flag of the integer tag which can be used to identify
+            the AS number. Defaults to 32.
         """
         super(MarkedCuckooFilter, self).__init__(capacity, error_rate, bucket_size, max_kicks, **kwargs)
         self.bit_tag_len = MarkedCuckooFilter.DEFAULT_BIT_LEN
         self.int_tag_len = MarkedCuckooFilter.DEFAULT_INT_LEN
         if 'bit_tag_len' in kwargs:
             self.bit_tag_len = kwargs['bit_tag_len']
-        if 'int_tag_flag' in kwargs:
+        if 'int_tag_len' in kwargs:
             self.int_tag_len = kwargs['int_tag_len']
         self.finger_block_size = self.fingerprint_size + self.bit_tag_len + self.int_tag_len
         self.buckets = bitarray(self.capacity * self.bucket_size * self.finger_block_size)

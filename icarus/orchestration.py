@@ -335,13 +335,13 @@ def run_scenario(settings, params, curr_exp, n_exp):
             n_exp,
             timestr(duration, True),
         )
-        return (params, results, duration)
+        return params, results, duration
     except KeyboardInterrupt:
         logger.error("Received keyboard interrupt. Terminating")
         sys.exit(-signal.SIGINT)
     except Exception as e:
         # err_type = str(type(e)).split("'")[1].split(".")[1]
-        err_message = e.message
+        err_message = str(e)
         logger.error(
             "Experiment %d/%d | Failed | %s\n%s",
             curr_exp,

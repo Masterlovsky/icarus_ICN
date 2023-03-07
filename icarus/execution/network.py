@@ -1064,7 +1064,7 @@ class SEANRSModel(NetworkModel):
                 self.conhash.add_node(node, conf=stack_props)
                 self.bgn_nodes[stack_props['asn']].add(node)
                 # ! set MDCF of each BGN node, capacity default to 10000
-                self.MCFS[node] = ScalableCuckooFilter(100000, 10 ** (-6), class_type=MarkedCuckooFilter)
+                self.MCFS[node] = ScalableCuckooFilter(100000, 10 ** (-6), class_type=MarkedCuckooFilter, bit_tag_len=64)
             elif stack_name == "switch":
                 self.ctrl_num[node] = stack_props["ctrl"]
                 self.switches_in_ctrl[stack_props['asn']][stack_props["ctrl"]].add(node)
