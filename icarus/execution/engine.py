@@ -14,6 +14,7 @@ from icarus.execution import (
     NetworkView,
     NetworkController,
     CollectorProxy,
+    simulation_time,
 )
 from icarus.registry import DATA_COLLECTOR, STRATEGY
 from icarus.scenarios import SEANRS_Topology
@@ -54,7 +55,7 @@ def exec_experiment(topology, workload, netconf, strategy, cache_policy, collect
         A tree with the aggregated simulation results from all collectors
     """
     strategy_name = strategy["name"]
-
+    # *  ---- 1. create Network Model ----
     if isinstance(topology, SEANRS_Topology):
         if strategy_name == "MDHT":
             model = MDHTModel(topology, cache_policy, **netconf)
@@ -62,18 +63,25 @@ def exec_experiment(topology, workload, netconf, strategy, cache_policy, collect
             model = SEANRSModel(topology, cache_policy, **netconf)
     else:
         model = NetworkModel(topology, cache_policy, **netconf)
+
+    # * ---- 2. create Network View ----
     view = NetworkView(model)
+
+    # * ---- 3. create Network Controller ----
     controller = NetworkController(model)
 
+    # * ---- 4. attach Collectors to controller ----
     collectors_inst = [
         DATA_COLLECTOR[name](view, **params) for name, params in collectors.items()
     ]
     collector = CollectorProxy(view, collectors_inst)
     controller.attach_collector(collector)
 
+    # * ---- 5. Use strategy to process event ----
     strategy_args = {k: v for k, v in strategy.items() if k != "name"}
     strategy_inst = STRATEGY[strategy_name](view, controller, **strategy_args)
 
     for time, event in tqdm(workload, desc="Processing request: "):
+        simulation_time.Sim_T.set_sim_time(time)
         strategy_inst.process_event(time, **event)
     return collector.results()

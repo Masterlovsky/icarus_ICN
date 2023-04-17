@@ -26,3 +26,4 @@ python-dateutil
 Click
 matplotlib
 setuptools
+tqdm

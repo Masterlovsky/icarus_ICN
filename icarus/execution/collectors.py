@@ -469,6 +469,8 @@ class CacheHitRatioCollector(DataCollector):
     @inheritdoc(DataCollector)
     def results(self):
         n_sess = self.cache_hits + self.serv_hits
+        if n_sess == 0:
+            return Tree()
         hit_ratio = self.cache_hits / n_sess
         results = Tree(**{"MEAN": hit_ratio})
         if self.off_path_hits:

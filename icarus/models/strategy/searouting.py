@@ -3,12 +3,13 @@ import random
 
 from icarus.registry import register_strategy
 from icarus.util import inheritdoc, path_links
-
+from icarus.execution.simulation_time import Sim_T
 from .base import Strategy
 import logging
 
 __all__ = [
     "SEANRS",
+    "SEACACHE",
 ]
 
 logger = logging.getLogger("SEANRS-strategy")
@@ -226,3 +227,43 @@ class SEANRS(Strategy):
             self.controller.forward_content_path(dst_node, receiver)
 
         self.controller.end_session()
+
+
+@register_strategy("SEACACHE")
+class SEACACHE(Strategy):
+    """
+    SEACACHE routing strategy is cache architecture for SEANet name resolution records
+    Just like LCE, but driven by source of the request. If a cache miss happened, source will determine what to cache.
+    """
+    def __init__(self, view, controller, **kwargs):
+        super().__init__(view, controller)
+
+    def process_event(self, time, receiver, content, log):
+        """
+        ===== Main process of SEANet cache strategy =====
+        """
+        # get all required data
+        source = self.view.content_source(content)
+        path = self.view.shortest_path(receiver, source)
+        # Route requests to original source and queries caches on the path
+        self.controller.start_session(time, receiver, content, log)
+        serving_node = None
+        for u, v in path_links(path):
+            self.controller.forward_request_hop(u, v)
+            if self.view.has_cache(v):
+                if self.controller.get_content(v):
+                    serving_node = v
+                    break
+            # No cache hits, get content from source
+            self.controller.get_content(v)
+            serving_node = v
+        # Return content
+        path = list(reversed(self.view.shortest_path(receiver, serving_node)))
+        for u, v in path_links(path):
+            self.controller.forward_content_hop(u, v)
+            if self.view.has_cache(v):
+                # insert content
+                self.controller.put_content(v, ttl=10)
+                # todo: pre-caching additional content to node v
+        self.controller.end_session()
+        print(Sim_T.get_sim_time())

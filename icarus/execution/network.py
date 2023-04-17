@@ -25,6 +25,8 @@ from icarus.util import iround, path_links
 from icarus.utils.cuckoo import *
 from icarus.utils.uhashring import HashRing
 from icarus.utils.dht_chord import DHT, NodeDHT
+from icarus.models.cache.policies import ttl_cache
+from icarus.execution.simulation_time import *
 
 __all__ = ["NetworkModel", "NetworkView", "NetworkController"]
 
@@ -159,6 +161,20 @@ class NetworkView:
             The controller to which the node is connected
         """
         return self.model.ctrl_num[v]
+
+    def get_related_content(self, p_content, node, **kwargs):
+        """
+        Parameters
+        ----------
+        p_content:
+            The primary content name
+        node:
+            The node name
+        return:
+            The related content list: [(c1,v1),(c2,v2),...,(ck,vk)]
+        """
+        k = kwargs.get("k", 50)
+        pass
 
     def get_switches_in_ctrl(self, asn, ctrln):
         """Return the switches in the given controller
@@ -546,10 +562,13 @@ class NetworkModel:
         policy_name = cache_policy["name"]
         policy_args = {k: v for k, v in cache_policy.items() if k != "name"}
         # The actual cache objects storing the content
-        self.cache = {
-            node: CACHE_POLICY[policy_name](cache_size[node], **policy_args)
-            for node in cache_size
-        }
+        self.cache = {}
+        for node in cache_size:
+            nc = CACHE_POLICY[policy_name](cache_size[node], **policy_args)
+            if cache_policy["timeout"]:
+                self.cache[node] = ttl_cache(nc, Sim_T.get_sim_time)
+            else:
+                self.cache[node] = nc
 
         # This is for a local un-coordinated cache (currently used only by
         # Hashrouting with edge cache)
@@ -726,7 +745,7 @@ class NetworkController:
         if self.collector is not None and self.session["log"]:
             self.collector.resolve(content, area)
 
-    def put_content(self, node):
+    def put_content(self, node, **kwargs):
         """Store content in the specified node.
 
         The node must have a cache stack and the actual insertion of the
@@ -745,7 +764,7 @@ class NetworkController:
             The evicted object or *None* if no contents were evicted.
         """
         if node in self.model.cache:
-            return self.model.cache[node].put(self.session["content"])
+            return self.model.cache[node].put(self.session["content"], **kwargs)
 
     def get_content(self, node):
         """Get a content from a server or a cache.
@@ -1064,7 +1083,8 @@ class SEANRSModel(NetworkModel):
                 self.conhash.add_node(node, conf=stack_props)
                 self.bgn_nodes[stack_props['asn']].add(node)
                 # ! set MDCF of each BGN node, capacity default to 10000
-                self.MCFS[node] = ScalableCuckooFilter(100000, 10 ** (-6), class_type=MarkedCuckooFilter, bit_tag_len=64)
+                self.MCFS[node] = ScalableCuckooFilter(100000, 10 ** (-6), class_type=MarkedCuckooFilter,
+                                                       bit_tag_len=64)
             elif stack_name == "switch":
                 self.ctrl_num[node] = stack_props["ctrl"]
                 self.switches_in_ctrl[stack_props['asn']][stack_props["ctrl"]].add(node)

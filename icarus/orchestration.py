@@ -319,8 +319,9 @@ def run_scenario(settings, params, curr_exp, n_exp):
         # * 10. Set collectors
         collectors = {m: {} for m in metrics}
         # collectors["LATENCY"]["cdf"] = True
-        collectors["LINK_LOAD"]["content_size"] = 0
-        collectors["LINK_LOAD"]["req_size"] = 1  # set req_size to 1 to statistics pps
+        if "LINK_LOAD" in metrics:
+            collectors["LINK_LOAD"]["content_size"] = 0
+            collectors["LINK_LOAD"]["req_size"] = 1  # set req_size to 1 to statistics pps
 
         # * 11.  ==== Run experiment ====
         logger.info("Experiment %d/%d | Start simulation", curr_exp, n_exp)
