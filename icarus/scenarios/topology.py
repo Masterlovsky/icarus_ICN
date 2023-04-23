@@ -105,6 +105,16 @@ class IcnTopology(fnss.Topology):
             if "stack" in self.node[v] and self.node[v]["stack"][0] == "receiver"
         }
 
+    def dump_topology(self, filename="topology_info.txt"):
+        """
+        dump node information stack and edge information to a file
+        """
+        with open(filename, "w") as f:
+            for v in self.nodes():
+                f.write("node: " + str(v) + " " + str(self.node[v]) + "\n")
+            for u, v in self.edges():
+                f.write("edge: " + str(u) + " " + str(v) + " " + str(self.adj[u][v]) + "\n")
+
 
 class SEANRS_Topology(IcnTopology):
     """

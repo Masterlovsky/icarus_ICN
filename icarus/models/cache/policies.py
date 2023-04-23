@@ -1799,7 +1799,7 @@ def keyval_cache(cache):
     return cache
 
 
-def ttl_cache(cache, f_time):
+def ttl_cache(cache, f_time, **kwargs):
     """Return a TTL cache.
 
     This function takes as a input a cache policy and returns a new policy
@@ -1818,6 +1818,8 @@ def ttl_cache(cache, f_time):
     f_time : callable
         A function that returns the current time (simulated or real). The
         return type must be a numerical value, e.g. float
+    kwargs :
+        t0: int, optional, default cache time to live
 
     Returns
     -------
@@ -1843,6 +1845,8 @@ def ttl_cache(cache, f_time):
 
     cache.f_time = f_time
     cache.expiry = {}
+    t0 = kwargs.get("t0", 10)
+    cache.content_ttl = defaultdict(lambda: t0)
 
     cache._exp_list = LinkedSet()
 
@@ -1914,6 +1918,7 @@ def ttl_cache(cache, f_time):
                 # if TTL is not positive, then do not cache the content at all
                 return None
             expires = now + ttl
+            cache.content_ttl[k] = ttl
         else:  # case where TTL is None
             if expires is None:
                 # If both TTL and expire are None, then TTL is infinite

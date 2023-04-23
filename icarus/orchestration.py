@@ -281,7 +281,7 @@ def run_scenario(settings, params, curr_exp, n_exp):
 
         # * 5. Set workload
         workload = WORKLOAD[workload_name](topology, **workload_spec)
-        logger.info("Workload set.")
+        logger.info("Workload [{}] set.".format(workload_name))
 
         # * 6. Caching and routing strategy definition
         strategy = tree["strategy"]

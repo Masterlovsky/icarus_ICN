@@ -590,6 +590,22 @@ def iround(x):
     return int(y) + (y > 0)
 
 
+def sigmoid(x):
+    """Compute the sigmoid function
+
+    Parameters
+    ----------
+    x : float
+        The input value
+
+    Returns
+    -------
+    y : float
+        The sigmoid of x
+    """
+    return 1 / (1 + np.exp(-x))
+
+
 def step_cdf(x, y):
     """Convert an empirical CDF in set of points representing steps.
 

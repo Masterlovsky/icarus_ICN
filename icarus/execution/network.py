@@ -162,19 +162,123 @@ class NetworkView:
         """
         return self.model.ctrl_num[v]
 
-    def get_related_content(self, p_content, node, **kwargs):
+    def get_related_content(self, p_content, cache_node, server_node, **kwargs):
         """
         Parameters
         ----------
         p_content:
             The primary content name
-        node:
-            The node name
+        cache_node:
+            The cache node name
+        server_node:
+            The server node name
+        kwargs:
+            k: the number of related content
+            method: the method to choose related content, random, optimal or recommended
         return:
             The related content list: [(c1,v1),(c2,v2),...,(ck,vk)]
         """
+        ret = []
         k = kwargs.get("k", 50)
-        pass
+        contents = self.model.source_node.get(server_node, [])
+        if len(contents) == 0:
+            logger.warning("The server node %s has no content!", server_node)
+        # todo: three method, 1. random 2. optimal 3. recommend
+        # 1. random
+        if kwargs.get("method", "random") == "random":
+            # choose k content randomly from contents without p_content, set value to 1
+            if len(contents) <= k:
+                ret = [(c, 1) for c in contents if c != p_content]
+            else:
+                ret = [(c, 1) for c in random.sample(contents, k) if c != p_content]
+            return ret
+        # 2. optimal
+        elif kwargs.get("method", "random") == "optimal":
+            # Select the content of the last k requests in the workload without p_content, set value to 1
+            if len(contents) <= k:
+                ret = [(c, 1) for c in contents if c != p_content]
+            else:
+                pass
+            return ret
+        # 3. recommend
+        elif kwargs.get("method", "random") == "recommend":
+            pass
+        else:
+            raise ValueError("The method is not supported!" % kwargs.get("method", "random"))
+
+    def get_content_freq(self, k):
+        """Return the frequency of content requests
+
+        Parameters
+        ----------
+        k : any hashable type
+            The content identifier
+
+        Returns
+        -------
+        freq : int
+            The frequency of content requests
+        """
+        timestamp_l = self.model.content_freq[k]
+        if len(timestamp_l) == 0 or len(timestamp_l) == 1:
+            return 0
+        return len(timestamp_l) / (timestamp_l[-1] - timestamp_l[0])
+
+    def get_content_pop(self, k):
+        """Return the popularity of content
+
+        Parameters
+        ----------
+        k : any hashable type
+            The content identifier
+
+        Returns
+        -------
+        pop : float
+            The popularity of content requests
+        """
+        timestamp_l = self.model.content_freq[k]
+        if len(timestamp_l) == 0 or len(timestamp_l) == 1:
+            return 0
+        t_start = timestamp_l[0]
+        t_end = timestamp_l[-1]
+        total_req_num = 0
+        for t_l in self.model.content_freq.values():
+            #  get the number in t_l which is in [t_start, t_end]
+            total_req_num += len([t for t in t_l if t_start <= t <= t_end])
+        return len(timestamp_l) / total_req_num
+
+    def get_content_ttl(self, v, k):
+        """Return the TTL of content
+
+        Parameters
+        ----------
+        v : any hashable type
+            The node identifier
+
+        k : any hashable type
+            The content identifier
+
+        Returns
+        -------
+        ttl : int
+            The TTL of content
+        """
+        if v not in self.model.cache:
+            return 0
+        if not hasattr(self.model.cache[v], "content_ttl"):
+            return 0
+        return self.model.cache[v].content_ttl[k]
+
+    def get_default_ttl(self):
+        """Return the default TTL of content
+
+        Returns
+        -------
+        ttl : int
+            The default TTL of content
+        """
+        return self.model.t0
 
     def get_switches_in_ctrl(self, asn, ctrln):
         """Return the switches in the given controller
@@ -463,6 +567,16 @@ class NetworkView:
         else:
             return False
 
+    def get_available_cache_size(self, node):
+        """
+        Returns the available cache size of a node.
+        """
+        if node in self.model.cache:
+            # if ttl cache, purge expired items first
+            if hasattr(self.model.cache[node], "expiry"):
+                self.model.cache[node].purge()
+            return self.model.cache[node].maxlen - len(self.model.cache[node])
+
     def cache_dump(self, node):
         """Returns the dump of the content of a cache in a specific node
 
@@ -501,6 +615,7 @@ class NetworkModel:
         shortest_path : dict of dict, optional
             The all-pair shortest paths of the network
         """
+        self.t0 = 10  # for ttl cache
         # Filter inputs
         if not isinstance(topology, fnss.Topology):
             raise ValueError(
@@ -525,6 +640,8 @@ class NetworkModel:
         self.content_source = {}
         # Dictionary mapping the reverse, i.e. nodes to set of contents stored
         self.source_node = {}
+        # Dictionary mapping each content request frequency {c: [t1, t2, ...]}
+        self.content_freq = defaultdict(list)
 
         # Dictionary of link types (internal/external)
         self.link_type = nx.get_edge_attributes(topology, "type")
@@ -551,7 +668,7 @@ class NetworkModel:
                 for content in contents:
                     self.content_source[content] = node
         if any(c < 1 for c in cache_size.values()):
-            logger.warn(
+            logger.warning(
                 "Some content caches have size equal to 0. "
                 "I am setting them to 1 and run the experiment anyway"
             )
@@ -565,8 +682,9 @@ class NetworkModel:
         self.cache = {}
         for node in cache_size:
             nc = CACHE_POLICY[policy_name](cache_size[node], **policy_args)
-            if cache_policy["timeout"]:
-                self.cache[node] = ttl_cache(nc, Sim_T.get_sim_time)
+            if "timeout" in policy_args and policy_args["timeout"]:
+                self.t0 = policy_args["t0"]
+                self.cache[node] = ttl_cache(nc, Sim_T.get_sim_time, t0=self.t0)
             else:
                 self.cache[node] = nc
 
@@ -763,8 +881,9 @@ class NetworkController:
         evicted : any hashable type
             The evicted object or *None* if no contents were evicted.
         """
+        content = kwargs.get("content", self.session["content"])
         if node in self.model.cache:
-            return self.model.cache[node].put(self.session["content"], **kwargs)
+            return self.model.cache[node].put(content, **kwargs)
 
     def get_content(self, node):
         """Get a content from a server or a cache.
@@ -779,6 +898,7 @@ class NetworkController:
         content : bool
             True if the content is available, False otherwise
         """
+        self.model.content_freq[self.session["content"]].append(Sim_T.get_sim_time())
         if node in self.model.cache:
             cache_hit = self.model.cache[node].get(self.session["content"])
             if cache_hit:

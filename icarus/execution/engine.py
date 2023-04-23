@@ -19,7 +19,6 @@ from icarus.execution import (
 from icarus.registry import DATA_COLLECTOR, STRATEGY
 from icarus.scenarios import SEANRS_Topology
 
-
 __all__ = ["exec_experiment"]
 
 
