@@ -2,7 +2,7 @@
 import random
 
 from icarus.registry import register_strategy
-from icarus.util import inheritdoc, path_links, sigmoid
+from icarus.util import inheritdoc, path_links, sigmoid, exp_map_to_01
 from icarus.execution.simulation_time import Sim_T
 from .base import Strategy
 import logging
@@ -238,7 +238,8 @@ class SEACACHE(Strategy):
 
     def __init__(self, view, controller, **kwargs):
         super().__init__(view, controller)
-        self.view.topology().dump_topology()
+        self.view.topology().dump_topology_info()
+        self.view.topology().gen_topo_file()
         self.alpha = 0.05  # Space occupancy limit of switch's cache
         self.beta = 0.5  # A hyperparameter used to adjust the contribution of historical TTL
 
@@ -270,23 +271,29 @@ class SEACACHE(Strategy):
             if self.view.has_cache(v):
                 # insert content
                 self.controller.put_content(v, ttl=self.view.get_content_ttl(v, content))
+
                 # TODO 2023/4/22: pre-caching additional content to node v
                 # * ==== first step: get the candidate recommendation list [(c1,v1),(c2,v2),...]
-                cand_rec_l = self.view.get_related_content(content, v, serving_node, k=50, method="random")
+                # cand_rec_l = self.view.get_related_content(content, v, serving_node, k=50, method="random")
+                # cand_rec_l = self.view.get_related_content(content, v, serving_node, k=100, method="optimal", index=kwargs["index"])
+                cand_rec_l = self.view.get_related_content(content, v, serving_node, k=100, method="popularity")
+                # cand_rec_l = self.view.get_related_content(content, v, serving_node, k=50, method="recommend")
+                # print(cand_rec_l[:5])
 
                 # * ==== second step: get Numbers of incrementally distributed caches use available cache size of sw.
                 ava_size = self.view.get_available_cache_size(v)
                 # content_pop = sigmoid(self.view.get_content_freq(content))
                 content_pop = self.view.get_content_pop(content)
                 cand_size = int(self.alpha * ava_size * content_pop)
-                # print("available size: ", ava_size, "content_pop: ", content_pop, "cand_size: ", cand_size)
+                # print("cand_rec_l[0]: ", cand_rec_l[0], "available size: ", ava_size, "content_pop: ", content_pop, "cand_size: ", cand_size)
 
                 # * ==== third step: get the TTL value of candidate cache records.
                 cand_rec_l.sort(key=lambda x: x[1], reverse=True)
                 cand_rec_l = cand_rec_l[:int(cand_size)]
                 out_rec_l = []
                 for c, va in cand_rec_l:
-                    t = self.beta * self.view.get_content_ttl(v, c) + (1 - self.beta) * va * content_pop * self.view.get_default_ttl()
+                    t = self.beta * self.view.get_content_ttl(v, c) + \
+                        (1 - self.beta) * va * content_pop * self.view.get_default_ttl()
                     out_rec_l.append((c, t))
                 # print("out_rec_l: ", len(out_rec_l))
 

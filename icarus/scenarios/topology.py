@@ -105,15 +105,81 @@ class IcnTopology(fnss.Topology):
             if "stack" in self.node[v] and self.node[v]["stack"][0] == "receiver"
         }
 
-    def dump_topology(self, filename="topology_info.txt"):
+    def switches(self):
+        """Return a set of switches
+
+        Returns
+        -------
+        switches : set
+            Set of switches
         """
-        dump node information stack and edge information to a file
+        return {
+            v
+            for v in self
+            if "stack" in self.node[v] and self.node[v]["stack"][0] == "switch"
+        }
+
+    def bgns(self):
+        """Return a set of bgns
+
+        Returns
+        -------
+        bgns : set
+            Set of bgns
+        """
+        return {
+            v
+            for v in self
+            if "stack" in self.node[v] and self.node[v]["stack"][0] == "bgn"
+        }
+
+    def routers(self):
+        """Return a set of routers
+
+        Returns
+        -------
+        routers : set
+            Set of routers
+        """
+        return {
+            v
+            for v in self
+            if "stack" in self.node[v] and self.node[v]["stack"][0] == "router"
+        }
+
+    def gen_topo_file(self, filename="topology.txt"):
+        """
+        Generate topology file for page display. The first line is the total node number and line number.
+        The following lines are edge information, each line is a edge, the format is:
+        <node1 node2 category1 category2> means node1 and node2 are connected
+        -------------
+        500 920
+        12	10	1	1
+        12	11	1	1
+        13	12	1	1
+        13	11	1	1
+        ...
+        -------------
         """
         with open(filename, "w") as f:
-            for v in self.nodes():
-                f.write("node: " + str(v) + " " + str(self.node[v]) + "\n")
+            f.write(str(len(self.nodes())) + " " + str(len(self.edges())) + "\n")
             for u, v in self.edges():
-                f.write("edge: " + str(u) + " " + str(v) + " " + str(self.adj[u][v]) + "\n")
+                f.write(str(u) + " " + str(v) + " " + str("1") + " " + str("1") + "\n")
+
+    def dump_topology_info(self, filename="node_type.txt"):
+        """
+        Dump node information stack to node_type.txt format:
+        receiver: [142, 131, ...]
+        source: [105, 110, ...]
+        switch: [9, 12, 98, 99, 103, ...]
+        bgn: [7, 13, 23, ...]
+
+        """
+        with open(filename, "w") as f:
+            f.write("receiver: " + str(list(self.receivers())) + "\n")
+            f.write("source: " + str(list(self.sources())) + "\n")
+            f.write("switch: " + str(list(self.switches())) + "\n")
+            f.write("bgn: " + str(list(self.bgns())) + "\n")
 
 
 class SEANRS_Topology(IcnTopology):

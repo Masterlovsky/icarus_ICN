@@ -12,6 +12,7 @@ about the network status by calling methods of the `NetworkView` instance.
 The `NetworkController` is also responsible to notify a `DataCollectorProxy`
 of all relevant events.
 """
+import bisect
 from collections import defaultdict
 import logging
 
@@ -67,6 +68,7 @@ class NetworkView:
     For example the network view provides information about shortest paths,
     characteristics of links and currently cached objects in nodes.
     """
+    POP_RANGE = 10  # ! set 10s as a popularity calculate range
 
     def __init__(self, model):
         """Constructor
@@ -175,36 +177,55 @@ class NetworkView:
         kwargs:
             k: the number of related content
             method: the method to choose related content, random, optimal or recommended
-        return:
-            The related content list: [(c1,v1),(c2,v2),...,(ck,vk)]
+            index: the index of the workload (only use in optimal mode)
+        Returns:
+            ret: The related content list: [(c1,v1),(c2,v2),...,(ck,vk)]
         """
         ret = []
         k = kwargs.get("k", 50)
         contents = self.model.source_node.get(server_node, [])
         if len(contents) == 0:
             logger.warning("The server node %s has no content!", server_node)
-        # todo: three method, 1. random 2. optimal 3. recommend
-        # 1. random
+        # todo: three method, 1. random 2. optimal 3. popularity 4. recommend
+        # * ---- 1. random ----
         if kwargs.get("method", "random") == "random":
             # choose k content randomly from contents without p_content, set value to 1
             if len(contents) <= k:
                 ret = [(c, 1) for c in contents if c != p_content]
             else:
                 ret = [(c, 1) for c in random.sample(contents, k) if c != p_content]
-            return ret
-        # 2. optimal
+        # * ---- 2. optimal ----
         elif kwargs.get("method", "random") == "optimal":
             # Select the content of the last k requests in the workload without p_content, set value to 1
             if len(contents) <= k:
                 ret = [(c, 1) for c in contents if c != p_content]
             else:
-                pass
-            return ret
-        # 3. recommend
+                if "index" not in kwargs:
+                    raise ValueError("The index is not provided! in optimal mode")
+                index = kwargs.get("index")
+                if not hasattr(self.workload(), "reqs_df"):
+                    raise ValueError("Optimal mode should use a REAL workload!")
+                reqs_df = self.workload().reqs_df
+                # return the following k content in the reqs_df from index which has the same value "cache_node" in the column "city"
+                # and the value of the column "uri" is not equal to p_content
+                df = reqs_df.loc[index + 1:, :]
+                df = df[(df["city"] == cache_node) & (df["uri"] != p_content)]
+                df = df.head(k)
+                # print("cache_node:{}, index:{}".format(cache_node, index))
+                # print(df)
+                ret = [(c, 1) for c in df["uri"]]
+        # * ---- 3. popularity ----
+        # send additional k content to the cache node according to the popularity of the content
+        # always send the content with the highest popularity in global scope
+        elif kwargs.get("method", "random") == "popularity":
+            ret = self.get_global_content_pop(k)
+
+        # * ---- 4. recommend ----
         elif kwargs.get("method", "random") == "recommend":
             pass
         else:
             raise ValueError("The method is not supported!" % kwargs.get("method", "random"))
+        return ret
 
     def get_content_freq(self, k):
         """Return the frequency of content requests
@@ -240,13 +261,29 @@ class NetworkView:
         timestamp_l = self.model.content_freq[k]
         if len(timestamp_l) == 0 or len(timestamp_l) == 1:
             return 0
-        t_start = timestamp_l[0]
         t_end = timestamp_l[-1]
-        total_req_num = 0
-        for t_l in self.model.content_freq.values():
-            #  get the number in t_l which is in [t_start, t_end]
-            total_req_num += len([t for t in t_l if t_start <= t <= t_end])
-        return len(timestamp_l) / total_req_num
+        t_start = t_end - NetworkView.POP_RANGE if t_end > NetworkView.POP_RANGE else 0
+        # find t_start in timestamp_l use bisect
+        c_freq = len(timestamp_l) - bisect.bisect_right(timestamp_l, t_start)
+        total_freq = len(self.model.req_freq) - bisect.bisect_right(self.model.req_freq, t_start)
+        pop = c_freq / total_freq if total_freq != 0 else 0
+        # print("t_start:{}, t_end:{}, total_req_num:{}, pop:{}".format(t_start, t_end, total_freq, pop))
+        return pop
+
+    def get_global_content_pop(self, k):
+        """Return the global popularity of content
+
+        Parameters
+        ----------
+        k : int
+            The number of content
+        Returns
+        -------
+        pop_l : list
+            The popularity of content in [(c1, p1),(c2, p2),...,(ck, pk),...]
+        """
+
+        return self.model.content_pop[:k]
 
     def get_content_ttl(self, v, k):
         """Return the TTL of content
@@ -475,6 +512,17 @@ class NetworkView:
         """
         return self.model.topology
 
+    def workload(self):
+        """Return the model workload
+
+        Returns
+        -------
+        workload :
+            The workload object
+
+        """
+        return self.model.workload
+
     def cache_nodes(self, size=False):
         """Returns a list of nodes with caching capability
 
@@ -601,7 +649,7 @@ class NetworkModel:
     calls to the network controller.
     """
 
-    def __init__(self, topology, cache_policy, shortest_path=None):
+    def __init__(self, topology, cache_policy, workload, shortest_path=None):
         """Constructor
 
         Parameters
@@ -634,7 +682,8 @@ class NetworkModel:
 
         # Network topology
         self.topology = topology
-
+        # Workload
+        self.workload = workload
         # Dictionary mapping each content object to its source
         # dict of location of contents keyed by content ID
         self.content_source = {}
@@ -642,6 +691,10 @@ class NetworkModel:
         self.source_node = {}
         # Dictionary mapping each content request frequency {c: [t1, t2, ...]}
         self.content_freq = defaultdict(list)
+        # capture the timestamp of each request
+        self.req_freq = []
+        # list of content objects and their popularity [(c1, p1), (c2, p2), ...], read from file
+        self.content_pop = []
 
         # Dictionary of link types (internal/external)
         self.link_type = nx.get_edge_attributes(topology, "type")
@@ -688,6 +741,10 @@ class NetworkModel:
             else:
                 self.cache[node] = nc
 
+        # if REAL_Workload, get content popularity from workload
+        if hasattr(workload, "content_popularity"):
+            self.content_pop = workload.content_popularity
+
         # This is for a local un-coordinated cache (currently used only by
         # Hashrouting with edge cache)
         self.local_cache = {}
@@ -724,6 +781,7 @@ class NetworkController:
         self.session = None
         self.model = model
         self.collector = None
+        self.counter = 0  # counter for the number of server hits
 
     def attach_collector(self, collector):
         """Attach a data collector to which all events will be reported.
@@ -899,6 +957,12 @@ class NetworkController:
             True if the content is available, False otherwise
         """
         self.model.content_freq[self.session["content"]].append(Sim_T.get_sim_time())
+        self.model.req_freq.append(Sim_T.get_sim_time())
+        # calculate the hit ratio with the first 10 hits and then every 100 hits
+        # self.collector.seq_hit_ratio(Sim_T.get_sim_time())
+        self.counter += 1
+        if self.counter < 200 or self.counter % 1000 == 0:
+            self.collector.seq_hit_ratio(Sim_T.get_sim_time())
         if node in self.model.cache:
             cache_hit = self.model.cache[node].get(self.session["content"])
             if cache_hit:
@@ -907,6 +971,7 @@ class NetworkController:
             else:
                 if self.session["log"]:
                     self.collector.cache_miss(node)
+            # self.collector.seq_hit_ratio(Sim_T.get_sim_time())
             return cache_hit
         name, props = fnss.get_stack(self.model.topology, node)
         if name == "source" and self.session["content"] in props["contents"]:
@@ -1170,9 +1235,9 @@ class SEANRSModel(NetworkModel):
     This class extends the NetworkModel class to add some new features in SEANet INNRS
     """
 
-    def __init__(self, topology, cache_policy, shortest_path=None):
+    def __init__(self, topology, cache_policy, workload, shortest_path=None):
         logger.info("Initializing SEANRS Network Model...")
-        super().__init__(topology, cache_policy, shortest_path)
+        super().__init__(topology, cache_policy, workload, shortest_path)
         # controllers of global specific name space
         # sdncontrollers[as_id][ctrl_id] = {content: node}
         self.sdncontrollers = defaultdict(lambda: defaultdict(dict))
@@ -1249,12 +1314,12 @@ class MDHTModel(NetworkModel):
     3 levels of MDHT: BGN O(log(n)), AS O(1), and ctrl O(1)
     """
 
-    def __init__(self, topology, cache_policy, shortest_path=None, k=(10, 10, 15)):
+    def __init__(self, topology, cache_policy, workload, shortest_path=None, k=(10, 10, 15)):
         """
         Parameters:
             k: 3 levels, 2 ** k is the number of buckets in each level of MDHT
         """
-        super().__init__(topology, cache_policy, shortest_path)
+        super().__init__(topology, cache_policy, workload, shortest_path)
         self.dn2tn = {}  # dht node id to topology node id
         # as number of each node, as_num[node] = as_id
         self.as_num = {}

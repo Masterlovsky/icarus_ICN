@@ -606,6 +606,11 @@ def sigmoid(x):
     return 1 / (1 + np.exp(-x))
 
 
+def exp_map_to_01(x, alpha=1):
+    # Map positive decimals to 0-1, alpha controls the slope, alpha ↑, slope ↑
+    return 1 - np.exp(-alpha * x)
+
+
 def step_cdf(x, y):
     """Convert an empirical CDF in set of points representing steps.
 
@@ -639,7 +644,7 @@ def step_cdf(x, y):
 
 
 def overlay_betweenness_centrality(
-    topology, origins=None, destinations=None, normalized=True, endpoints=False
+        topology, origins=None, destinations=None, normalized=True, endpoints=False
 ):
     """Calculate the betweenness centrality of a graph but only regarding the
     paths from a set of origins nodes to a set of destinations node.

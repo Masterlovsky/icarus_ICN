@@ -46,7 +46,7 @@ experiment = Tree()
 
 # Set topology
 experiment["topology"]["name"] = "TREE"
-experiment["topology"]["k"] = 5
+experiment["topology"]["k"] = 10
 experiment["topology"]["h"] = 2
 
 # # Set workload
@@ -65,14 +65,12 @@ experiment["workload"] = {
     "name": "REAL",
     "reqs_file": "/20220610/df.csv",
     "summarize_file": "/20220610/summarize.txt",
-    "n_contents": 12664,
-    "n_warmup": 100,
-    "n_measured": 100,
+    "n_contents": 26240,
 }
 
 # Set cache placement
 experiment["cache_placement"]["name"] = "UNIFORM"
-experiment["cache_placement"]["network_cache"] = 1
+experiment["cache_placement"]["network_cache"] = 0.1
 
 # Set content placement
 experiment["content_placement"]["name"] = "UNIFORM"
@@ -80,7 +78,7 @@ experiment["content_placement"]["name"] = "UNIFORM"
 # Set cache replacement policy
 experiment["cache_policy"]["name"] = "LRU"
 experiment["cache_policy"]["timeout"] = True
-experiment["cache_policy"]["t0"] = 100
+experiment["cache_policy"]["t0"] = 1000
 
 # Set caching meta-policy
 experiment["strategy"]["name"] = "SEACACHE"

@@ -57,11 +57,11 @@ def exec_experiment(topology, workload, netconf, strategy, cache_policy, collect
     # *  ---- 1. create Network Model ----
     if isinstance(topology, SEANRS_Topology):
         if strategy_name == "MDHT":
-            model = MDHTModel(topology, cache_policy, **netconf)
+            model = MDHTModel(topology, cache_policy, workload, **netconf)
         else:
-            model = SEANRSModel(topology, cache_policy, **netconf)
+            model = SEANRSModel(topology, cache_policy, workload, **netconf)
     else:
-        model = NetworkModel(topology, cache_policy, **netconf)
+        model = NetworkModel(topology, cache_policy, workload, **netconf)
 
     # * ---- 2. create Network View ----
     view = NetworkView(model)

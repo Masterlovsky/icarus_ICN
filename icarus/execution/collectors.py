@@ -177,6 +177,7 @@ class CollectorProxy(DataCollector):
         "packet_in",
         "resolve",
         "results",
+        "seq_hit_ratio",
     )
 
     def __init__(self, view, collectors):
@@ -231,6 +232,10 @@ class CollectorProxy(DataCollector):
     def resolve(self, content, area):
         for c in self.collectors["resolve"]:
             c.resolve(content, area)
+
+    def seq_hit_ratio(self, timestamp):
+        for c in self.collectors["seq_hit_ratio"]:
+            c.seq_hit_ratio(timestamp)
 
     @inheritdoc(DataCollector)
     def end_session(self, success=True):
@@ -346,6 +351,7 @@ class LatencyCollector(DataCollector):
     content.
     """
     PACKET_IN_DEFAULT_LATENCY = 3  # 3 ms for packet in
+
     def __init__(self, view, cdf=False):
         """Constructor
 
@@ -408,7 +414,7 @@ class CacheHitRatioCollector(DataCollector):
     requests served by a cache.
     """
 
-    def __init__(self, view, off_path_hits=False, per_node=True, content_hits=False):
+    def __init__(self, view, off_path_hits=False, per_node=True, content_hits=False, seq_hit_ratio=True):
         """Constructor
 
         Parameters
@@ -425,10 +431,12 @@ class CacheHitRatioCollector(DataCollector):
         self.view = view
         self.off_path_hits = off_path_hits
         self.per_node = per_node
+        self.time_seq_hit_ratio = seq_hit_ratio
         self.cont_hits = content_hits
         self.sess_count = 0
         self.cache_hits = 0
         self.serv_hits = 0
+        self.seq_hit_ratio_l = []  # timestamp sequence of hit ratio
         if off_path_hits:
             self.off_path_hit_count = 0
         if per_node:
@@ -466,6 +474,19 @@ class CacheHitRatioCollector(DataCollector):
         if self.per_node:
             self.per_node_server_hits[node] += 1
 
+    def seq_hit_ratio(self, timestamp):
+        """
+        return cache hit ratio at timestamp
+        """
+        if self.cache_hits + self.serv_hits == 0:
+            return 0
+        hit_ratio = self.cache_hits / (self.cache_hits + self.serv_hits)
+        if self.seq_hit_ratio_l and timestamp == self.seq_hit_ratio_l[-1][0]:
+            self.seq_hit_ratio_l[-1] = (timestamp, hit_ratio)
+        else:
+            self.seq_hit_ratio_l.append((timestamp, hit_ratio))
+        return hit_ratio
+
     @inheritdoc(DataCollector)
     def results(self):
         n_sess = self.cache_hits + self.serv_hits
@@ -495,6 +516,8 @@ class CacheHitRatioCollector(DataCollector):
                 self.per_node_server_hits[v] /= n_sess
             results["PER_NODE_CACHE_HIT_RATIO"] = self.per_node_cache_hits
             results["PER_NODE_SERVER_HIT_RATIO"] = self.per_node_server_hits
+        if self.time_seq_hit_ratio:
+            results["SEQ_HIT_RATIO"] = self.seq_hit_ratio_l
         return results
 
 

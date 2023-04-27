@@ -25,6 +25,7 @@ import fnss
 import networkx as nx
 from tqdm import tqdm
 from os import path
+import pandas as pd
 from icarus.tools import TruncatedZipfDist
 from icarus.registry import register_workload
 
@@ -605,13 +606,13 @@ class REALWorkload(object):
         self.receivers = get_nodes_with_type(topology, "receiver")
         self.routers = get_nodes_with_type(topology, "router")
         self.reqs_f = open(WORKLOAD_RESOURCES_DIR + reqs_file, "r")
-        self.reqs_reader = csv.reader(self.reqs_f, delimiter=",")
-        # skip the first line
-        self.reqs_reader.__next__()
+        self.reqs_df = pd.read_csv(self.reqs_f, sep=",")
         # read the first line of summarize_file to get the number of contents
         self.summarize_file = open(WORKLOAD_RESOURCES_DIR + summarize_file, "r")
         self.n_contents = int(self.summarize_file.readline().split(":")[1])
         self.city_num = int(self.summarize_file.readline().split(":")[1])
+        self.summarize_file.readline()  # skip the line of "total rows"
+        self.content_popularity = eval(self.summarize_file.readline().split(":")[1])
         self.contents = range(1, self.n_contents + 1)
         self.router2recv = collections.defaultdict(list)
         for router in self.routers:
@@ -623,13 +624,13 @@ class REALWorkload(object):
     def __iter__(self):
         req_counter = 0
         t_event = 0.0
-        for timestamp, client, sw, content, size in self.reqs_reader:
+        for index, (timestamp, client, sw, content, size) in self.reqs_df.iterrows():
             t_event = float(timestamp)
             # get receiver by sw, receiver should be a node connected to sw
             if int(sw) not in self.routers:
                 continue
             receiver = random.choice(self.router2recv[int(sw)])
-            event = {"receiver": receiver, "content": int(content), "log": True, "size": int(size)}
+            event = {"receiver": receiver, "content": int(content), "log": True, "size": int(size), "index": index}
             req_counter += 1
             yield t_event, event
         self.reqs_f.close()
