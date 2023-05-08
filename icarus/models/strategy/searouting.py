@@ -240,8 +240,9 @@ class SEACACHE(Strategy):
         super().__init__(view, controller)
         self.view.topology().dump_topology_info()
         self.view.topology().gen_topo_file()
-        self.alpha = 0.05  # Space occupancy limit of switch's cache
+        self.alpha = 0.1  # Space occupancy limit of switch's cache
         self.beta = 0.5  # A hyperparameter used to adjust the contribution of historical TTL
+        self.rec_method = kwargs.get("rec_method", "random")
 
     def process_event(self, time, receiver, content, log, **kwargs):
         """
@@ -274,10 +275,7 @@ class SEACACHE(Strategy):
 
                 # TODO 2023/4/22: pre-caching additional content to node v
                 # * ==== first step: get the candidate recommendation list [(c1,v1),(c2,v2),...]
-                # cand_rec_l = self.view.get_related_content(content, v, serving_node, k=50, method="random")
-                # cand_rec_l = self.view.get_related_content(content, v, serving_node, k=100, method="optimal", index=kwargs["index"])
-                cand_rec_l = self.view.get_related_content(content, v, serving_node, k=100, method="popularity")
-                # cand_rec_l = self.view.get_related_content(content, v, serving_node, k=50, method="recommend")
+                cand_rec_l = self.view.get_related_content(content, v, serving_node, k=50, method=self.rec_method, index=kwargs.get("index", -1))
                 # print(cand_rec_l[:5])
 
                 # * ==== second step: get Numbers of incrementally distributed caches use available cache size of sw.
@@ -285,7 +283,7 @@ class SEACACHE(Strategy):
                 # content_pop = sigmoid(self.view.get_content_freq(content))
                 content_pop = self.view.get_content_pop(content)
                 cand_size = int(self.alpha * ava_size * content_pop)
-                # print("cand_rec_l[0]: ", cand_rec_l[0], "available size: ", ava_size, "content_pop: ", content_pop, "cand_size: ", cand_size)
+                # print("cand_rec_len: ", len(cand_rec_l), "available size: ", ava_size, "content_pop: ", content_pop, "cand_size: ", cand_size)
 
                 # * ==== third step: get the TTL value of candidate cache records.
                 cand_rec_l.sort(key=lambda x: x[1], reverse=True)

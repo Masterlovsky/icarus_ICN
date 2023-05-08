@@ -17,6 +17,8 @@ following attributes:
 Each workload must expose the `contents` attribute which is an iterable of
 all content identifiers. This is needed for content placement.
 """
+import logging
+import os
 import random
 import csv
 import collections
@@ -44,6 +46,8 @@ WORKLOAD_RESOURCES_DIR = path.abspath(
         path.dirname(__file__), path.pardir, path.pardir, "resources", "workloads"
     )
 )
+
+logger = logging.getLogger("orchestration")
 
 
 def get_nodes_with_type(topology, ntype="receiver"):
@@ -605,13 +609,22 @@ class REALWorkload(object):
         self.topology = topology
         self.receivers = get_nodes_with_type(topology, "receiver")
         self.routers = get_nodes_with_type(topology, "router")
-        self.reqs_f = open(WORKLOAD_RESOURCES_DIR + reqs_file, "r")
-        self.reqs_df = pd.read_csv(self.reqs_f, sep=",")
+        reqs_f = WORKLOAD_RESOURCES_DIR + reqs_file
+        self.reqs_df = pd.read_csv(reqs_f, sep=",", names=["city", "uri", "rating", "timestamp"],
+                                   dtype={"city": int, "uri": int, "rating": float, "timestamp": float})
+        rec_f = WORKLOAD_RESOURCES_DIR + kwargs.get("rec_file", "pred.csv")
+        rec_val_f = WORKLOAD_RESOURCES_DIR + kwargs.get("rec_val_file", "pred_val.csv")
+        if os.path.exists(rec_f) and os.path.exists(rec_val_f):
+            self.rec_df = pd.read_csv(rec_f)
+            self.rec_val_df = pd.read_csv(rec_val_f)
+        else:
+            self.rec_df = None
+            self.rec_val_df = None
         # read the first line of summarize_file to get the number of contents
         self.summarize_file = open(WORKLOAD_RESOURCES_DIR + summarize_file, "r")
         self.n_contents = int(self.summarize_file.readline().split(":")[1])
         self.city_num = int(self.summarize_file.readline().split(":")[1])
-        self.summarize_file.readline()  # skip the line of "total rows"
+        self.total_req_num = min(int(self.summarize_file.readline().split(":")[1]), kwargs.get("n_requests", 100000))
         self.content_popularity = eval(self.summarize_file.readline().split(":")[1])
         self.contents = range(1, self.n_contents + 1)
         self.router2recv = collections.defaultdict(list)
@@ -624,15 +637,18 @@ class REALWorkload(object):
     def __iter__(self):
         req_counter = 0
         t_event = 0.0
-        for index, (timestamp, client, sw, content, size) in self.reqs_df.iterrows():
-            t_event = float(timestamp)
+        for index, (sw, content, rating, timestamp) in self.reqs_df.iterrows():
+            if req_counter > self.total_req_num:
+                break
+            t_event = timestamp
             # get receiver by sw, receiver should be a node connected to sw
-            if int(sw) not in self.routers:
+            if sw not in self.routers:
                 continue
-            receiver = random.choice(self.router2recv[int(sw)])
-            event = {"receiver": receiver, "content": int(content), "log": True, "size": int(size), "index": index}
+            receiver = random.choice(self.router2recv[sw])
+            event = {"receiver": receiver, "content": content, "log": True, "rating": rating,
+                     "index": index}
             req_counter += 1
             yield t_event, event
-        self.reqs_f.close()
         self.summarize_file.close()
+        logging.info("Total requests: %d" % req_counter)
         return

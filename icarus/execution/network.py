@@ -13,21 +13,21 @@ The `NetworkController` is also responsible to notify a `DataCollectorProxy`
 of all relevant events.
 """
 import bisect
-from collections import defaultdict
 import logging
+from collections import defaultdict
 
+import fnss
 import mmh3
 import networkx as nx
-import fnss
 from tqdm import tqdm
 
+from icarus.execution.simulation_time import *
+from icarus.models.cache.policies import ttl_cache
 from icarus.registry import CACHE_POLICY
 from icarus.util import iround, path_links
 from icarus.utils.cuckoo import *
-from icarus.utils.uhashring import HashRing
 from icarus.utils.dht_chord import DHT, NodeDHT
-from icarus.models.cache.policies import ttl_cache
-from icarus.execution.simulation_time import *
+from icarus.utils.uhashring import HashRing
 
 __all__ = ["NetworkModel", "NetworkView", "NetworkController"]
 
@@ -186,7 +186,7 @@ class NetworkView:
         contents = self.model.source_node.get(server_node, [])
         if len(contents) == 0:
             logger.warning("The server node %s has no content!", server_node)
-        # todo: three method, 1. random 2. optimal 3. popularity 4. recommend
+        # todo: five method, 1. random 2. optimal 3. popularity 4. recommend, 5. group
         # * ---- 1. random ----
         if kwargs.get("method", "random") == "random":
             # choose k content randomly from contents without p_content, set value to 1
@@ -200,7 +200,7 @@ class NetworkView:
             if len(contents) <= k:
                 ret = [(c, 1) for c in contents if c != p_content]
             else:
-                if "index" not in kwargs:
+                if "index" == -1:
                     raise ValueError("The index is not provided! in optimal mode")
                 index = kwargs.get("index")
                 if not hasattr(self.workload(), "reqs_df"):
@@ -208,9 +208,10 @@ class NetworkView:
                 reqs_df = self.workload().reqs_df
                 # return the following k content in the reqs_df from index which has the same value "cache_node" in the column "city"
                 # and the value of the column "uri" is not equal to p_content
-                df = reqs_df.loc[index + 1:, :]
-                df = df[(df["city"] == cache_node) & (df["uri"] != p_content)]
+                df = reqs_df.iloc[index + 1:]
+                df = df[df["city"].eq(cache_node) & ~df["uri"].eq(p_content)]
                 df = df.head(k)
+
                 # print("cache_node:{}, index:{}".format(cache_node, index))
                 # print(df)
                 ret = [(c, 1) for c in df["uri"]]
@@ -222,7 +223,21 @@ class NetworkView:
 
         # * ---- 4. recommend ----
         elif kwargs.get("method", "random") == "recommend":
-            pass
+            ret = self.get_recommend_content(k, cache_node, p_content)
+
+        # * ---- 5. group ----
+        elif kwargs.get("method", "random") == "group":
+            if "index" == -1:
+                raise ValueError("The index is not provided! in optimal mode")
+            index = kwargs.get("index")
+            if not hasattr(self.workload(), "reqs_df"):
+                raise ValueError("Optimal mode should use a REAL workload!")
+            reqs_df = self.workload().reqs_df
+            # return the following k content in the reqs_df from index which has the same value "cache_node" in the column "city"
+            # and the value of the column "uri" is not equal to p_content
+            df = reqs_df.iloc[index + 1:index + 1 + k]
+            ret = [(c, 1) for c in df["uri"]]
+
         else:
             raise ValueError("The method is not supported!" % kwargs.get("method", "random"))
         return ret
@@ -284,6 +299,20 @@ class NetworkView:
         """
 
         return self.model.content_pop[:k]
+
+    def get_recommend_content(self, k, cache_node, p_content):
+        # open pred_file and get the recommend content, each line in pred_file is a recommend content list
+        # Each line's format is [(content, value), (content, value), ...]
+        rec_df = self.workload().rec_df
+        rec_val_df = self.workload().rec_val_df
+        if rec_df is None or rec_val_df is None:
+            raise ValueError("Recommend dataframe is None! check config file!")
+
+        # get random k recommend content in line cache_node without p_content
+        ret = [(c, v) for c, v in zip(rec_df.loc[cache_node, :].values, rec_val_df.loc[cache_node, :].values)
+               if c != p_content]
+        random.shuffle(ret)
+        return ret[:k]
 
     def get_content_ttl(self, v, k):
         """Return the TTL of content

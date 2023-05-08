@@ -1915,14 +1915,15 @@ def ttl_cache(cache, f_time, **kwargs):
                     "Only one can be provided."
                 )
             if ttl <= 0:
-                # if TTL is not positive, then do not cache the content at all
-                return None
-            expires = now + ttl
-            cache.content_ttl[k] = ttl
+                # if TTL is not positive, then TTL is infinite
+                expires = np.infty
+            else:
+                expires = now + ttl
+                cache.content_ttl[k] = ttl
         else:  # case where TTL is None
             if expires is None:
-                # If both TTL and expire are None, then TTL is infinite
-                expires = np.infty
+                # If both TTL and expire are None, then set TTL to default
+                expires = now + t0
             elif expires <= now:
                 return None
         # Purge expired items only if cache is full for performance reasons

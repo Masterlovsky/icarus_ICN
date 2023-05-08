@@ -129,7 +129,7 @@ class LeaveCopyEverywhere(Strategy):
         super().__init__(view, controller)
 
     @inheritdoc(Strategy)
-    def process_event(self, time, receiver, content, log):
+    def process_event(self, time, receiver, content, log, **kwargs):
         # get all required data
         source = self.view.content_source(content)
         path = self.view.shortest_path(receiver, source)

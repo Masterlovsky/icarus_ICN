@@ -36,6 +36,7 @@ __all__ = [
     "topology_seanrs_simple",
     "topology_seanrs_complete",
     "topology_seanrs",
+    "topology_nrs_cache",
 ]
 
 # Delays
@@ -1147,3 +1148,54 @@ def topology_seanrs(**kwargs) -> SEANRS_Topology:
             topology.edges[u, v]["type"] = "internal"
     logger.info("Change link type done!")
     return SEANRS_Topology(topology)
+
+
+@register_topology_factory("NRS_CACHE")
+def topology_nrs_cache(k, l=3, h=1, delay=1, **kwargs):
+    """
+    Construct a NRS cache topology.
+    Parameters
+    ----------
+    k: int
+        The number of switches connected to source, it is the intermediate node of a tree.
+    l: int
+        The number of leaf host node of each switch, it is the leaf node of a tree.
+    h: int
+        The height of the tree. Usually set to 1. -> only one source and many switches
+    delay: int
+        The delay of each link.
+
+    Returns
+    -------
+    topology : IcnTopology
+        The topology object
+    """
+    topology = fnss.k_ary_tree_topology(k, h)
+    # add leaf nodes
+    for i in range(0, k):
+        for j in range(1, l + 1):
+            topology.add_edge(i + 1, k + i * l + j)
+            # add "depth" attribute
+            topology.nodes[k + i * l + j]["depth"] = h + 1
+
+    receivers = [v for v in topology.nodes() if topology.node[v]["depth"] == h + 1]
+    sources = [v for v in topology.nodes() if topology.node[v]["depth"] == 0]
+    routers = [
+        v
+        for v in topology.nodes()
+        if 0 < topology.node[v]["depth"] <= h
+    ]
+    topology.graph["icr_candidates"] = set(routers)
+    for v in sources:
+        fnss.add_stack(topology, v, "source")
+    for v in receivers:
+        fnss.add_stack(topology, v, "receiver")
+    for v in routers:
+        fnss.add_stack(topology, v, "router")
+    # set weights and delays on all links
+    fnss.set_weights_constant(topology, 1.0)
+    fnss.set_delays_constant(topology, delay, "ms")
+    # label links as internal
+    for u, v in topology.edges():
+        topology.adj[u][v]["type"] = "internal"
+    return IcnTopology(topology)

@@ -45,9 +45,9 @@ EXPERIMENT_QUEUE = deque()
 experiment = Tree()
 
 # Set topology
-experiment["topology"]["name"] = "TREE"
-experiment["topology"]["k"] = 10
-experiment["topology"]["h"] = 2
+experiment["topology"]["name"] = "NRS_CACHE"
+experiment["topology"]["k"] = 30
+experiment["topology"]["l"] = 2
 
 # # Set workload
 # experiment["workload"] = {
@@ -63,14 +63,18 @@ experiment["topology"]["h"] = 2
 # Set Real Workload
 experiment["workload"] = {
     "name": "REAL",
-    "reqs_file": "/20220610/df.csv",
+    "reqs_file": "/20220610/request.csv",
     "summarize_file": "/20220610/summarize.txt",
-    "n_contents": 26240,
+    "rec_file": "/20220610/pred-CDAE.csv",
+    "rec_val_file": "/20220610/pred-CDAE-val.csv",
+    # source node will contain content in range(1, n_contents), this value should be larger than the number of contents in the request file
+    "n_contents": 200000,
+    "n_requests": 50000,  # maximum number of requests to be read from the request file
 }
 
 # Set cache placement
 experiment["cache_placement"]["name"] = "UNIFORM"
-experiment["cache_placement"]["network_cache"] = 0.1
+experiment["cache_placement"]["network_cache"] = 0.2
 
 # Set content placement
 experiment["content_placement"]["name"] = "UNIFORM"
@@ -78,10 +82,12 @@ experiment["content_placement"]["name"] = "UNIFORM"
 # Set cache replacement policy
 experiment["cache_policy"]["name"] = "LRU"
 experiment["cache_policy"]["timeout"] = True
-experiment["cache_policy"]["t0"] = 1000
+experiment["cache_policy"]["t0"] = 10*60
 
 # Set caching meta-policy
+# experiment["strategy"]["name"] = "LCE"
 experiment["strategy"]["name"] = "SEACACHE"
+experiment["strategy"]["rec_method"] = "group"  # {"random", "optimal", "popularity", "recommend", "group"}
 
 # Description of the experiment
 experiment["desc"] = "SEACACHE simple topology test"
