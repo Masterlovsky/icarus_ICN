@@ -17,8 +17,10 @@ following attributes:
 Each workload must expose the `contents` attribute which is an iterable of
 all content identifiers. This is needed for content placement.
 """
+import json
 import logging
 import os
+import pickle
 import random
 import csv
 import collections
@@ -606,6 +608,7 @@ class REALWorkload(object):
     """
 
     def __init__(self, topology, reqs_file, summarize_file, **kwargs):
+        random.seed(kwargs.get("seed", 0))
         self.topology = topology
         self.receivers = get_nodes_with_type(topology, "receiver")
         self.routers = get_nodes_with_type(topology, "router")
@@ -614,35 +617,64 @@ class REALWorkload(object):
                                    dtype={"city": int, "uri": int, "rating": float, "timestamp": float})
         rec_f = WORKLOAD_RESOURCES_DIR + kwargs.get("rec_file", "pred.csv")
         rec_val_f = WORKLOAD_RESOURCES_DIR + kwargs.get("rec_val_file", "pred_val.csv")
-        if os.path.exists(rec_f) and os.path.exists(rec_val_f):
-            self.rec_df = pd.read_csv(rec_f)
-            self.rec_val_df = pd.read_csv(rec_val_f)
+        group_f = WORKLOAD_RESOURCES_DIR + kwargs.get("group_file", "group_uri_dict.json")
+        ip2city_f = WORKLOAD_RESOURCES_DIR + kwargs.get("ip2city_file", "ip_city_dict.json")
+        with open(group_f, "r") as f:
+            group_dict = json.load(f)
+            self.group_uri_dict = {int(k): v for k, v in group_dict.items()}
+
+        with open(ip2city_f, "r") as f:
+            ip_city_dict = json.load(f)
+            self.ip_city_dict = {int(k): v for k, v in ip_city_dict.items()}
+
+        #  read rec_val_df from cache if exists
+        rec_val_cache_f = WORKLOAD_RESOURCES_DIR + kwargs.get("rec_val_cache_file", "rec_val_cache.pkl")
+        if os.path.exists(rec_val_cache_f):
+            logger.info("Loading rec_val_dict from cache")
+            self.rec_val_dict = pickle.load(open(rec_val_cache_f, "rb"))
         else:
-            self.rec_df = None
-            self.rec_val_df = None
+            logger.info("Building rec_val_dict...")
+            self.rec_val_dict = collections.defaultdict(list)
+            if os.path.exists(rec_f) and os.path.exists(rec_val_f):
+                rec_df = pd.read_csv(rec_f, index_col=0, header=None)
+                val_df = pd.read_csv(rec_val_f, index_col=0, header=None)
+                # for each line, filter out uris that are not in the request file
+                for i in range(len(rec_df)):
+                    rec_df.iloc[i] = rec_df.iloc[i].apply(lambda x: x if x in self.reqs_df["uri"] else None)
+                # add to rec_val_dict, key is ip_city_dict[index], value is a list of tuples (rec, val), filter out None
+                for i in tqdm(range(len(rec_df)), desc="rec_val_dict_init"):
+                    for j in range(1, len(rec_df.iloc[i]) + 1):
+                        if not pd.isna(rec_df.iloc[i][j]):
+                            self.rec_val_dict[self.ip_city_dict[rec_df.iloc[i].name]].append((rec_df.iloc[i][j], val_df.iloc[i][j]))
+                # save rec_val_dict to cache
+                pickle.dump(self.rec_val_dict, open(rec_val_cache_f, "wb"))
+            else:
+                self.rec_val_dict = None
         # read the first line of summarize_file to get the number of contents
         self.summarize_file = open(WORKLOAD_RESOURCES_DIR + summarize_file, "r")
         self.n_contents = int(self.summarize_file.readline().split(":")[1])
+        self.max_content_id = int(self.summarize_file.readline().split(":")[1])
         self.city_num = int(self.summarize_file.readline().split(":")[1])
         self.total_req_num = min(int(self.summarize_file.readline().split(":")[1]), kwargs.get("n_requests", 100000))
         self.content_popularity = eval(self.summarize_file.readline().split(":")[1])
-        self.contents = range(1, self.n_contents + 1)
+        self.contents = range(1, self.max_content_id + 1)
         self.router2recv = collections.defaultdict(list)
         for router in self.routers:
             # get the receivers connected to the router
             for receiver in self.receivers:
                 if receiver in topology.adj[router]:
                     self.router2recv[router].append(receiver)
+        self.uri2time_dict = self.create_uri_time_map()
 
     def __iter__(self):
         req_counter = 0
         t_event = 0.0
         for index, (sw, content, rating, timestamp) in self.reqs_df.iterrows():
-            if req_counter > self.total_req_num:
+            if req_counter >= self.total_req_num:
                 break
             t_event = timestamp
             # get receiver by sw, receiver should be a node connected to sw
-            if sw not in self.routers:
+            if sw not in self.routers or not content:
                 continue
             receiver = random.choice(self.router2recv[sw])
             event = {"receiver": receiver, "content": content, "log": True, "rating": rating,
@@ -652,3 +684,14 @@ class REALWorkload(object):
         self.summarize_file.close()
         logging.info("Total requests: %d" % req_counter)
         return
+
+    def create_uri_time_map(self):
+        """
+        Create a map from uri to uri list, use timestamp as the group key.
+        For example, if uri 1 is requested at time 1, 12, 31, then the map is {1: [reqs at 1, reqs at 12, reqs at 31]}
+        """
+        logger.info("Creating uri to time map")
+        uri_to_time_map = collections.defaultdict(list)
+        for index, (sw, content, rating, timestamp) in self.reqs_df.iterrows():
+            uri_to_time_map[content].append(int(timestamp))
+        return uri_to_time_map

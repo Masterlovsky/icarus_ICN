@@ -223,7 +223,10 @@ class NetworkView:
 
         # * ---- 4. recommend ----
         elif kwargs.get("method", "random") == "recommend":
-            ret = self.get_recommend_content(k, cache_node, p_content)
+            tm = kwargs.get("tm", -1)
+            if tm == -1:
+                raise ValueError("The time is not provided! in recommend mode")
+            ret = self.get_recommend_content(k, cache_node, p_content, tm)
 
         # * ---- 5. group ----
         elif kwargs.get("method", "random") == "group":
@@ -300,18 +303,34 @@ class NetworkView:
 
         return self.model.content_pop[:k]
 
-    def get_recommend_content(self, k, cache_node, p_content):
+    def get_recommend_content(self, k, cache_node, p_content, time):
         # open pred_file and get the recommend content, each line in pred_file is a recommend content list
         # Each line's format is [(content, value), (content, value), ...]
-        rec_df = self.workload().rec_df
-        rec_val_df = self.workload().rec_val_df
-        if rec_df is None or rec_val_df is None:
+        rec_val_dict = self.workload().rec_val_dict
+        time_uri_dict = self.workload().group_uri_dict  # key is timestamp group, value is a list of uri
+        uri2time_dict = self.workload().uri2time_dict  # key is uri, value is timestamp
+        if rec_val_dict is None or time_uri_dict is None:
             raise ValueError("Recommend dataframe is None! check config file!")
 
         # get random k recommend content in line cache_node without p_content
-        ret = [(c, v) for c, v in zip(rec_df.loc[cache_node, :].values, rec_val_df.loc[cache_node, :].values)
-               if c != p_content]
-        random.shuffle(ret)
+        timestamps = uri2time_dict[p_content]
+        # filter timestamp before time arg
+        timestamps = [t for t in timestamps if t < time]
+        uri_t_filter = set()
+        for it, t in enumerate(timestamps):
+            if it > 20:
+                break
+            # range is 10 seconds
+            for i in range(t, t + 10):
+                if i in time_uri_dict:
+                    uri_t_filter.update(time_uri_dict[i])
+        # ret is half of rec_val_dict[cache_node] and half of uri_t_filter
+        # ret = ret[:k // 2] + [(c, 1) for c in uri_t_filter][:k // 2]
+        ret = [(c, 1) for c in uri_t_filter]
+        if len(ret) < k:
+            ret += rec_val_dict[cache_node][:k - len(ret)]
+        # ret = [c for c in ret if c[0] in uri_t_filter]
+        # random.shuffle(ret)
         return ret[:k]
 
     def get_content_ttl(self, v, k):

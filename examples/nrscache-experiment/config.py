@@ -67,9 +67,13 @@ experiment["workload"] = {
     "summarize_file": "/20220610/summarize.txt",
     "rec_file": "/20220610/pred-CDAE.csv",
     "rec_val_file": "/20220610/pred-CDAE-val.csv",
+    "group_file": "/20220610/group_uri_dict.json",
+    "ip2city_file": "/20220610/ip_city_dict.json",
+    "rec_val_cache_file": "/20220610/rec_val_cache.pkl",
     # source node will contain content in range(1, n_contents), this value should be larger than the number of contents in the request file
-    "n_contents": 200000,
+    "n_contents": 250000,
     "n_requests": 50000,  # maximum number of requests to be read from the request file
+    "seed": 2023
 }
 
 # Set cache placement
