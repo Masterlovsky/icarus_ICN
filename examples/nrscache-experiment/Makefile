@@ -1,6 +1,6 @@
 CONFIG_FILE ?= config.py
 RESULTS_FILE ?= results.pickle
-PRINT_FILE ?= results/0610/t_group.txt
+PRINT_FILE ?= results/0610/v_alpha_main.txt
 
 .PHONY: check_installed run clean
 

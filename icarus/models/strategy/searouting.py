@@ -240,7 +240,7 @@ class SEACACHE(Strategy):
         super().__init__(view, controller)
         self.view.topology().dump_topology_info()
         self.view.topology().gen_topo_file()
-        self.alpha = 0.5  # Space occupancy limit of switch's cache
+        self.alpha = kwargs.get("alpha", 0.1)  # Space occupancy limit of switch's cache
         self.beta = 0.5  # A hyperparameter used to adjust the contribution of historical TTL
         self.k = 1000  # A hyperparameter used to set the maximum number of recommend records.
         self.rec_method = kwargs.get("rec_method", "random")
@@ -300,6 +300,10 @@ class SEACACHE(Strategy):
                 # * ==== fourth step: insert the output cache records into the cache of sw.
                 for c, t in out_rec_l:
                     self.controller.put_content(v, content=c, ttl=t)
+
+        # cal free space ration each 10 sec
+        if time % 10 == 0:
+            self.controller.cal_free_space_ratio(time)
 
         self.controller.end_session()
         # print(Sim_T.get_sim_time())

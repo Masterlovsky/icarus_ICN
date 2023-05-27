@@ -285,8 +285,13 @@ class NetworkView:
         c_freq = len(timestamp_l) - bisect.bisect_right(timestamp_l, t_start)
         total_freq = len(self.model.req_freq) - bisect.bisect_right(self.model.req_freq, t_start)
         pop = c_freq / total_freq if total_freq != 0 else 0
-        # print("t_start:{}, t_end:{}, total_req_num:{}, pop:{}".format(t_start, t_end, total_freq, pop))
-        return pop
+        # normalizing pop
+        if total_freq > 1000:
+            self.model.content_pop_max = max(self.model.content_pop_max, pop)
+        if self.model.content_pop_max != 0:
+            pop /= self.model.content_pop_max
+        # print("t_start:{}, t_end:{}, total_req_num:{}, pop:{}, pop_max: {}".format(t_start, t_end, total_freq, pop, self.model.content_pop_max))
+        return min(pop, 1.0)
 
     def get_global_content_pop(self, k):
         """Return the global popularity of content
@@ -673,6 +678,15 @@ class NetworkView:
                 self.model.cache[node].purge()
             return self.model.cache[node].maxlen - len(self.model.cache[node])
 
+    def get_all_switches_free_space_ratio(self):
+        """
+        Returns the ratio of available cache space for each switch.
+        """
+        switches = self.cache_nodes()
+        total_used_space = sum([len(self.model.cache[s]) for s in switches])
+        total_space = sum([self.model.cache[s].maxlen for s in switches])
+        return (total_space - total_used_space) / total_space
+
     def cache_dump(self, node):
         """Returns the dump of the content of a cache in a specific node
 
@@ -743,6 +757,7 @@ class NetworkModel:
         self.req_freq = []
         # list of content objects and their popularity [(c1, p1), (c2, p2), ...], read from file
         self.content_pop = []
+        self.content_pop_max = 0
 
         # Dictionary of link types (internal/external)
         self.link_type = nx.get_edge_attributes(topology, "type")
@@ -968,6 +983,17 @@ class NetworkController:
         """
         if self.collector is not None and self.session["log"]:
             self.collector.resolve(content, area)
+
+    def cal_free_space_ratio(self, timestamp):
+        """Calculate the free space ratio of all ICN node.
+
+        Parameters
+        ----------
+        timestamp : int
+            The timestamp of the event
+        """
+        if self.collector is not None and self.session["log"]:
+            self.collector.seq_hit_ratio(timestamp)
 
     def put_content(self, node, **kwargs):
         """Store content in the specified node.

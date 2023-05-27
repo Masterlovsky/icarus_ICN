@@ -12,7 +12,7 @@ LOG_LEVEL = "INFO"
 
 # If True, executes simulations in parallel using multiple processes
 # to take advantage of multicore CPUs
-PARALLEL_EXECUTION = False
+PARALLEL_EXECUTION = True
 
 # Number of processes used to run simulations in parallel.
 # This option is ignored if PARALLEL_EXECUTION = False
@@ -32,7 +32,7 @@ RESULTS_FORMAT = "PICKLE"
 
 # List of metrics to be measured in the experiments
 # The implementation of data collectors are located in ./icarus/execution/collectors.py
-DATA_COLLECTORS = ["CACHE_HIT_RATIO"]
+DATA_COLLECTORS = ["CACHE_HIT_RATIO", "FREE_SPACE"]
 # DATA_COLLECTORS = ["LINK_LOAD"]
 
 # Number of requests per second (over the whole network)
@@ -73,7 +73,7 @@ experiment["workload"] = {
     # source node will contain content in range(1, n_contents), this value should be larger than the number of contents in the request file
     "n_contents": 250000,
     "n_requests": 50000,  # maximum number of requests to be read from the request file
-    "seed": 2023
+    # "seed": 2023
 }
 
 # Set cache placement
@@ -91,10 +91,28 @@ experiment["cache_policy"]["t0"] = 10*60
 # Set caching meta-policy
 # experiment["strategy"]["name"] = "LCE"
 experiment["strategy"]["name"] = "SEACACHE"
-experiment["strategy"]["rec_method"] = "group"  # {"random", "optimal", "popularity", "recommend", "group"}
+experiment["strategy"]["rec_method"] = "recommend"  # {"random", "optimal", "popularity", "recommend", "group"}
+experiment["strategy"]["alpha"] = 0.7  # percentage of switch available space {0.1, 0.3, 0.5, 0.7},
 
 # Description of the experiment
-experiment["desc"] = "SEACACHE simple topology test"
+experiment["desc"] = "SEACACHE cache hit ration with different alpha"
 
 # Append experiment to queue
-EXPERIMENT_QUEUE.append(experiment)
+# EXPERIMENT_QUEUE.append(experiment)
+
+# Copy experiment, change parameters and append to queue
+for method in ("LCE", "random", "recommend"):
+    for alpha in (0.1, 0.3, 0.5, 0.7):
+        for i in range(3):
+            extra_experiment = copy.deepcopy(experiment)
+            extra_experiment["workload"]["reqs_file"] = "/20220610/request_{}.csv".format(i + 1)
+            extra_experiment["workload"]["summarize_file"] = "/20220610/summarize_{}.txt".format(i + 1)
+            if method == "LCE":
+                extra_experiment["strategy"]["name"] = "LCE"
+            else:
+                extra_experiment["strategy"]["name"] = "SEACACHE"
+            extra_experiment["strategy"]["rec_method"] = method
+            extra_experiment["strategy"]["alpha"] = alpha
+            extra_experiment["desc"] = "SEACACHE / method: {} / alpha: {} / workload: {}".format(method, alpha, i + 1)
+            EXPERIMENT_QUEUE.append(extra_experiment)
+

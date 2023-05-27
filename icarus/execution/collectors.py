@@ -26,7 +26,8 @@ __all__ = [
     "PathStretchCollector",
     "DummyCollector",
     "PacketInCollector",
-    "LEVEL_HIT_Collector"
+    "LEVEL_HIT_Collector",
+    "SwitchFreeSpaceRatioCollector",
 ]
 
 
@@ -293,10 +294,10 @@ class LinkLoadCollector(DataCollector):
         used_links = set(self.req_count.keys()).union(set(self.cont_count.keys()))
         link_loads = {
             link: (
-                self.req_size * self.req_count[link]
-                + self.content_size * self.cont_count[link]
-            )
-            / duration
+                          self.req_size * self.req_count[link]
+                          + self.content_size * self.cont_count[link]
+                  )
+                  / duration
             for link in used_links
         }
         link_loads_int = {
@@ -503,8 +504,8 @@ class CacheHitRatioCollector(DataCollector):
             )
             cont_hits = {
                 i: (
-                    self.cont_cache_hits[i]
-                    / (self.cont_cache_hits[i] + self.cont_serv_hits[i])
+                        self.cont_cache_hits[i]
+                        / (self.cont_cache_hits[i] + self.cont_serv_hits[i])
                 )
                 for i in cont_set
             }
@@ -805,7 +806,8 @@ class LEVEL_HIT_Collector(DataCollector):
                     "CONCURRENCY_CACHE_MAX_VAL": max(self.cache_res_hit.values()) / duration,
                     "CONCURRENCY_CACHE_MEAN": sum(self.cache_res_hit.values()) / len(self.cache_res_hit) / duration,
                     "CONCURRENCY_CTRL_MAX_VAL": max(self.controller_res_hit.values()) / duration,
-                    "CONCURRENCY_CTRL_MEAN": sum(self.controller_res_hit.values()) / len(self.controller_res_hit) / duration,
+                    "CONCURRENCY_CTRL_MEAN": sum(self.controller_res_hit.values()) / len(
+                        self.controller_res_hit) / duration,
                     "CONCURRENCY_IBGN_MAX_VAL": max(self.ibgn_res_hit.values()) / duration,
                     "CONCURRENCY_IBGN_MEAN": sum(self.ibgn_res_hit.values()) / len(self.ibgn_res_hit) / duration,
                     "CONCURRENCY_EBGN_MAX_VAL": max(self.ebgn_res_hit.values()) / duration,
@@ -823,4 +825,42 @@ class LEVEL_HIT_Collector(DataCollector):
                     "RESOLVE_L3": self.resolve_l3,
                 }
             )
+        return results
+
+
+@register_data_collector("FREE_SPACE")
+class SwitchFreeSpaceRatioCollector(DataCollector):
+    """
+    Collect free space ratio for all the ICN switches.
+    """
+
+    def __init__(self, view, per_node=False):
+        super().__init__(view)
+        self.free_space_ratio = {}  # timestamp: ratio
+        self.per_node_free_space_ratio = collections.defaultdict(dict)  # node: {timestamp: ratio}
+        self.per_node = per_node
+
+    @inheritdoc(DataCollector)
+    def start_session(self, timestamp, receiver, content):
+        pass
+
+    @inheritdoc(DataCollector)
+    def end_session(self, success=True):
+        if not success:
+            return
+
+    def seq_hit_ratio(self, timestamp):
+        """
+        Collect the free space ratio with the timestamp sequence.
+        """
+        self.free_space_ratio[timestamp] = self.view.get_all_switches_free_space_ratio()
+
+    @inheritdoc(DataCollector)
+    def results(self):
+        results = Tree(
+            {
+                "SEQ_FREE_SPACE_RATIO": self.free_space_ratio,
+                "AVG_FREE_SPACE_RATIO": sum(self.free_space_ratio.values()) / len(self.free_space_ratio),
+            }
+        )
         return results
