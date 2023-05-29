@@ -242,7 +242,7 @@ class SEACACHE(Strategy):
         self.view.topology().gen_topo_file()
         self.alpha = kwargs.get("alpha", 0.1)  # Space occupancy limit of switch's cache
         self.beta = 0.5  # A hyperparameter used to adjust the contribution of historical TTL
-        self.k = 1000  # A hyperparameter used to set the maximum number of recommend records.
+        self.k = kwargs.get("k", 1000)  # A hyperparameter used to set the maximum number of recommend records.
         self.rec_method = kwargs.get("rec_method", "random")
 
     def process_event(self, time, receiver, content, log, **kwargs):

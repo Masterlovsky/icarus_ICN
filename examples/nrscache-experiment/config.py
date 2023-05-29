@@ -86,13 +86,14 @@ experiment["content_placement"]["name"] = "UNIFORM"
 # Set cache replacement policy
 experiment["cache_policy"]["name"] = "LRU"
 experiment["cache_policy"]["timeout"] = True
-experiment["cache_policy"]["t0"] = 10*60
+experiment["cache_policy"]["t0"] = 10 * 60
 
 # Set caching meta-policy
 # experiment["strategy"]["name"] = "LCE"
 experiment["strategy"]["name"] = "SEACACHE"
 experiment["strategy"]["rec_method"] = "recommend"  # {"random", "optimal", "popularity", "recommend", "group"}
-experiment["strategy"]["alpha"] = 0.7  # percentage of switch available space {0.1, 0.3, 0.5, 0.7},
+experiment["strategy"]["alpha"] = 0.3  # percentage of switch available space {0.1, 0.3, 0.5, 0.7},
+experiment["strategy"]["k"] = 1000  # number of contents to be recommended
 
 # Description of the experiment
 experiment["desc"] = "SEACACHE cache hit ration with different alpha"
@@ -101,8 +102,25 @@ experiment["desc"] = "SEACACHE cache hit ration with different alpha"
 # EXPERIMENT_QUEUE.append(experiment)
 
 # Copy experiment, change parameters and append to queue
+# --------- experiment 1: different alpha ---------
+# for method in ("LCE", "random", "recommend"):
+#     for alpha in (0.1, 0.3, 0.5, 0.7):
+#         for i in range(3):
+#             extra_experiment = copy.deepcopy(experiment)
+#             extra_experiment["workload"]["reqs_file"] = "/20220610/request_{}.csv".format(i + 1)
+#             extra_experiment["workload"]["summarize_file"] = "/20220610/summarize_{}.txt".format(i + 1)
+#             if method == "LCE":
+#                 extra_experiment["strategy"]["name"] = "LCE"
+#             else:
+#                 extra_experiment["strategy"]["name"] = "SEACACHE"
+#             extra_experiment["strategy"]["rec_method"] = method
+#             extra_experiment["strategy"]["alpha"] = alpha
+#             extra_experiment["desc"] = "SEACACHE / method: {} / alpha: {} / workload: {}".format(method, alpha, i + 1)
+#             EXPERIMENT_QUEUE.append(extra_experiment)
+
+# --------- experiment 2: different t0 ---------
 for method in ("LCE", "random", "recommend"):
-    for alpha in (0.1, 0.3, 0.5, 0.7):
+    for t0 in (10, 60, 600, 30 * 60, 60 * 60):
         for i in range(3):
             extra_experiment = copy.deepcopy(experiment)
             extra_experiment["workload"]["reqs_file"] = "/20220610/request_{}.csv".format(i + 1)
@@ -112,7 +130,22 @@ for method in ("LCE", "random", "recommend"):
             else:
                 extra_experiment["strategy"]["name"] = "SEACACHE"
             extra_experiment["strategy"]["rec_method"] = method
-            extra_experiment["strategy"]["alpha"] = alpha
-            extra_experiment["desc"] = "SEACACHE / method: {} / alpha: {} / workload: {}".format(method, alpha, i + 1)
+            extra_experiment["cache_policy"]["t0"] = t0
+            extra_experiment["desc"] = "SEACACHE / method: {} / t0: {} / workload: {}".format(method, t0, i + 1)
             EXPERIMENT_QUEUE.append(extra_experiment)
 
+# --------- experiment 3: different k ---------
+# for method in ("LCE", "random", "recommend"):
+#     for k in (10, 100, 500, 1000):
+#         for i in range(3):
+#             extra_experiment = copy.deepcopy(experiment)
+#             extra_experiment["workload"]["reqs_file"] = "/20220610/request_{}.csv".format(i + 1)
+#             extra_experiment["workload"]["summarize_file"] = "/20220610/summarize_{}.txt".format(i + 1)
+#             if method == "LCE":
+#                 extra_experiment["strategy"]["name"] = "LCE"
+#             else:
+#                 extra_experiment["strategy"]["name"] = "SEACACHE"
+#             extra_experiment["strategy"]["rec_method"] = method
+#             extra_experiment["strategy"]["k"] = k
+#             extra_experiment["desc"] = "SEACACHE / method: {} / k: {} / workload: {}".format(method, k, i + 1)
+#             EXPERIMENT_QUEUE.append(extra_experiment)
