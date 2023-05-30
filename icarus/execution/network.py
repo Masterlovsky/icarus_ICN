@@ -178,6 +178,7 @@ class NetworkView:
             k: the number of related content
             method: the method to choose related content, random, optimal or recommended
             index: the index of the workload (only use in optimal mode)
+            tm: timestamp
         Returns:
             ret: The related content list: [(c1,v1),(c2,v2),...,(ck,vk)]
         """
@@ -320,13 +321,13 @@ class NetworkView:
         # get random k recommend content in line cache_node without p_content
         timestamps = uri2time_dict[p_content]
         # filter timestamp before time arg
-        timestamps = [t for t in timestamps if t < time]
+        timestamps = [t for t in timestamps if self.workload().start_time < t < time]
         uri_t_filter = set()
         for it, t in enumerate(timestamps):
             if it > 20:
                 break
             # range is 10 seconds
-            for i in range(t, t + 10):
+            for i in range(t, int(min(t + 10, time))):
                 if i in time_uri_dict:
                     uri_t_filter.update(time_uri_dict[i])
         # ret is half of rec_val_dict[cache_node] and half of uri_t_filter

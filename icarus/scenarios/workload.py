@@ -615,6 +615,7 @@ class REALWorkload(object):
         reqs_f = WORKLOAD_RESOURCES_DIR + reqs_file
         self.reqs_df = pd.read_csv(reqs_f, sep=",", names=["city", "uri", "rating", "timestamp"],
                                    dtype={"city": int, "uri": int, "rating": float, "timestamp": float})
+        self.start_time = self.reqs_df["timestamp"].min()
         rec_f = WORKLOAD_RESOURCES_DIR + kwargs.get("rec_file", "pred.csv")
         rec_val_f = WORKLOAD_RESOURCES_DIR + kwargs.get("rec_val_file", "pred_val.csv")
         group_f = WORKLOAD_RESOURCES_DIR + kwargs.get("group_file", "group_uri_dict.json")
