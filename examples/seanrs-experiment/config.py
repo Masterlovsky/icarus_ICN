@@ -19,7 +19,7 @@ PARALLEL_EXECUTION = True
 N_PROCESSES = cpu_count()
 
 # Number of times each experiment is replicated
-N_REPLICATIONS = 3
+N_REPLICATIONS = 1
 
 # Granularity of caching.
 # Currently, only OBJECT is supported
@@ -78,4 +78,26 @@ experiment["strategy"]["name"] = "SEANRS"
 experiment["desc"] = "SEANRS simple topology test"
 
 # Append experiment to queue
-EXPERIMENT_QUEUE.append(experiment)
+# EXPERIMENT_QUEUE.append(experiment)
+
+for workload in ("LEVEL_PROBABILITY", "STATIONARY"):
+    for network_cache in ([10 ** i for i in range(-2, 3)]):
+        for req_rate in range(500, 1400, 100):
+            if workload == "LEVEL_PROBABILITY":
+                for lp in (0.3, 0.5, 0.7, 0.9):
+                    extra_experiment = copy.deepcopy(experiment)
+                    extra_experiment["workload"]["name"] = workload
+                    extra_experiment["cache_placement"]["network_cache"] = network_cache
+                    extra_experiment["workload"]["rate"] = req_rate
+                    extra_experiment["workload"]["lp"] = lp
+                    extra_experiment["desc"] = ("DINNRS / workload: {} / network_cache: {} / req_rate: {} / lp: {}"
+                                                .format(workload, network_cache, req_rate, lp))
+                    EXPERIMENT_QUEUE.append(extra_experiment)
+            else:
+                extra_experiment = copy.deepcopy(experiment)
+                extra_experiment["workload"]["name"] = workload
+                extra_experiment["cache_placement"]["network_cache"] = network_cache
+                extra_experiment["workload"]["rate"] = req_rate
+                extra_experiment["desc"] = ("DINNRS / workload: {} / network_cache: {} / req_rate: {}"
+                                            .format(workload, network_cache, req_rate))
+                EXPERIMENT_QUEUE.append(extra_experiment)
