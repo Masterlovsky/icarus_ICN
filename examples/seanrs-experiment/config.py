@@ -36,7 +36,7 @@ DATA_COLLECTORS = ["CACHE_HIT_RATIO", "LINK_LOAD", "LATENCY", "PACKET_IN", "LEVE
 # DATA_COLLECTORS = ["LINK_LOAD"]
 
 # Number of requests per second (over the whole network)
-REQ_RATE = 10**8
+REQ_RATE = 10 ** 8
 # ALPHA = [0.6, 0.8, 1.0]
 # Queue of experiments
 EXPERIMENT_QUEUE = deque()
@@ -81,23 +81,27 @@ experiment["desc"] = "SEANRS simple topology test"
 # EXPERIMENT_QUEUE.append(experiment)
 
 for workload in ("LEVEL_PROBABILITY", "STATIONARY"):
-    for network_cache in ([10 ** i for i in range(-2, 3)]):
-        for req_rate in range(500, 1400, 100):
-            if workload == "LEVEL_PROBABILITY":
-                for lp in (0.3, 0.5, 0.7, 0.9):
+    for network_cache in (0.01, 0.1, 0.5, 1.0, 2.0, 5.0, 10.0):
+        for alpha in (0.65, 0.75, 0.85):
+            for req_rate in range(5 * 10 ** 4, 15 * 10 ** 4, 10 ** 4):
+                if workload == "LEVEL_PROBABILITY":
+                    for lp in (0.3, 0.5, 0.7, 0.9):
+                        extra_experiment = copy.deepcopy(experiment)
+                        extra_experiment["workload"]["name"] = workload
+                        extra_experiment["cache_placement"]["network_cache"] = network_cache
+                        extra_experiment["workload"]["rate"] = req_rate
+                        extra_experiment["workload"]["lp"] = lp
+                        extra_experiment["workload"]["alpha"] = alpha
+                        extra_experiment["desc"] = (
+                            "DINNRS / workload: {} / network_cache: {} / req_rate: {} / lp: {} / alpha: {}"
+                            .format(workload, network_cache, req_rate, lp, alpha))
+                        EXPERIMENT_QUEUE.append(extra_experiment)
+                else:
                     extra_experiment = copy.deepcopy(experiment)
                     extra_experiment["workload"]["name"] = workload
                     extra_experiment["cache_placement"]["network_cache"] = network_cache
                     extra_experiment["workload"]["rate"] = req_rate
-                    extra_experiment["workload"]["lp"] = lp
-                    extra_experiment["desc"] = ("DINNRS / workload: {} / network_cache: {} / req_rate: {} / lp: {}"
-                                                .format(workload, network_cache, req_rate, lp))
+                    extra_experiment["workload"]["alpha"] = alpha
+                    extra_experiment["desc"] = ("DINNRS / workload: {} / network_cache: {} / req_rate: {} / alpha: {}"
+                                                .format(workload, network_cache, req_rate, alpha))
                     EXPERIMENT_QUEUE.append(extra_experiment)
-            else:
-                extra_experiment = copy.deepcopy(experiment)
-                extra_experiment["workload"]["name"] = workload
-                extra_experiment["cache_placement"]["network_cache"] = network_cache
-                extra_experiment["workload"]["rate"] = req_rate
-                extra_experiment["desc"] = ("DINNRS / workload: {} / network_cache: {} / req_rate: {}"
-                                            .format(workload, network_cache, req_rate))
-                EXPERIMENT_QUEUE.append(extra_experiment)
