@@ -1,6 +1,6 @@
 CONFIG_FILE ?= config.py
 RESULTS_FILE ?= results.pickle
-PRINT_FILE ?= results/test.txt
+PRINT_FILE ?= results/DINNRS_nf.txt
 
 .PHONY: check_installed run clean
 

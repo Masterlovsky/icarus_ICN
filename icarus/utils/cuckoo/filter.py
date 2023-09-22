@@ -802,22 +802,31 @@ class MarkedCuckooFilter(CuckooTemplate):
                              format(tag_area, idx, self.bit_tag_len - 1 if tag_area == "bit" else 2 ** self.int_tag_len - 1))
         return "".join(mask)
 
-    def decode_mask(self, mask: str):
+    def decode_mask(self, mask: str, strategy="bitFirst"):
         """
         Get to decode mask in the tag area(bit area or int area)
+        if strategy == "bitFirst", return bit tag area first; if strategy == "intFirst", return int tag area first
         return tag_area and idx
         """
         mask = bitarray(mask)
-        if mask[0:self.bit_tag_len].count(True) != 0:
-            bit_idx_l = [i for i, b in enumerate(mask[0:self.bit_tag_len]) if b]
-            # todo: if there are more than one bit_idx, return all?
-            return "bit", bit_idx_l
-        elif mask[self.bit_tag_len:self.bit_tag_len + self.int_tag_len].count(True) != 0:
-            int_idx = int(mask[self.bit_tag_len:self.bit_tag_len + self.int_tag_len].to01(), 2)
-            return "int", [int_idx]
-        else:
-            print("Warning! Filter value get error! The bit block is empty")
-            return "int", []
+        if strategy == "bitFirst":
+            if mask[0:self.bit_tag_len].count(True) != 0:
+                bit_idx_l = [i for i, b in enumerate(mask[0:self.bit_tag_len]) if b]
+                # todo: if there are more than one bit_idx, return all?
+                return "bit", bit_idx_l
+            elif mask[self.bit_tag_len:self.bit_tag_len + self.int_tag_len].count(True) != 0:
+                int_idx = int(mask[self.bit_tag_len:self.bit_tag_len + self.int_tag_len].to01(), 2)
+                return "int", [int_idx]
+            else:
+                print("Warning! Filter value get error! The bit block is empty")
+                return "int", []
+        elif strategy == "intFirst":
+            if mask[self.bit_tag_len:self.bit_tag_len + self.int_tag_len].count(True) != 0:
+                int_idx = int(mask[self.bit_tag_len:self.bit_tag_len + self.int_tag_len].to01(), 2)
+                return "int", [int_idx]
+            else:
+                print("Warning! Filter value get error! The bit block is empty")
+                return "int", []
 
     def _include(self, fingerprint, index):
         """
@@ -1101,13 +1110,13 @@ class ScalableCuckooFilter(object):
         """
         return self.filters[0].encode_mask(tag_area, idx)
 
-    def decode_mask(self, mask: str):
+    def decode_mask(self, mask: str, strategy="bitFirst"):
         """
         Get to decode mask in the tag area(bit area or int area)
         return tag_area and idx
         *** Only for MCF. ***
         """
-        return self.filters[0].decode_mask(mask)
+        return self.filters[0].decode_mask(mask, strategy)
 
     def delete(self, item, **kargs):
         """

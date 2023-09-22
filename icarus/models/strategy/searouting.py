@@ -142,7 +142,7 @@ class SEANRS(Strategy):
                     area_next, idx_l_next = mcf.decode_mask(mcf_next.get(content))
                     if area_next == 'bit':
                         for idx in idx_l_next:
-                            # todo: The following line is prone to bugs!! Not all control domains have access switches (topology problem)
+                            # fixed: Not all control domains have access switches (topology problem)
                             sws = self.view.get_switches_in_ctrl(idx_l[0], idx)
                             if sws:
                                 acc_sw.append(sws)

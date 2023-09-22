@@ -1,7 +1,7 @@
 CONFIG_FILE ?= config.py
 RESULTS_FILE ?= results.pickle
-PRINT_FILE ?= results/0610/v_alpha_main.txt
-CSV_FILE ?= results/0610/v_alpha_main.csv
+PRINT_FILE ?= results/0610/v_alpha_10x_v1.2.txt
+CSV_FILE ?= results/0610/v_alpha_10x_v1.2.csv
 
 .PHONY: check_installed run clean
 

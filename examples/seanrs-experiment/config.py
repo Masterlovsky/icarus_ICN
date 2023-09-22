@@ -47,11 +47,11 @@ experiment = Tree()
 # Set topology
 # experiment["topology"]["name"] = "SEANRS_SIMPLE"
 experiment["topology"]["name"] = "SEANRS"
-experiment["topology"]["scale"] = "10x100"
+experiment["topology"]["scale"] = "DINNRS_topo"
 
 # Set workload
 experiment["workload"] = {
-    "name": "LEVEL_PROBABILITY",
+    "name": "LEVEL_PROBABILITY",  # LEVEL_PROBABILITY, STATIONARY
     "n_contents": 10 ** 4,
     "n_warmup": 5 * 10 ** 4,
     "n_measured": 5 * 10 ** 4,
