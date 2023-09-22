@@ -92,10 +92,10 @@ def dump_result_to_csv(input_file: str = "result.pickle", out_file: str = "resul
 
             f.write(
                 exp_id + "," + topology_scale + "," + workload_name + "," + workload_n_contents + ","
-                + alpha + "," + lp + "," + rate + "," + strategy + "," + avg_chr + "," + intra_link_load + ","
-                + inter_link_load + "," + avg_latency + "," + pktin_total + "," + pktin_cpr + "," + req_num + ","
-                + resolve_cache + "," + resolve_ctrl + "," + resolve_ibgn + "," + resolve_ebgn + ","
-                + avg_cc_cache + "," + avg_cc_ctrl + "," + avg_cc_ibgn + "," + avg_cc_ebgn + "\n"
+                + alpha + "," + lp + "," + rate + "," + cache + "," + strategy + "," + avg_chr + "," +
+                intra_link_load + "," + inter_link_load + "," + avg_latency + "," + pktin_total + "," +
+                pktin_cpr + "," + req_num + "," + resolve_cache + "," + resolve_ctrl + "," + resolve_ibgn +
+                "," + resolve_ebgn + "," + avg_cc_cache + "," + avg_cc_ctrl + "," + avg_cc_ibgn + "," + avg_cc_ebgn + "\n"
             )
 
     print("Dump result to csv done! Check {}".format(out_file))
