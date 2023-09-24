@@ -713,7 +713,7 @@ class PacketInCollector(DataCollector):
         results = Tree(
             {
                 "PACKET_IN_COUNT_TOTAL": self.packet_in_count,
-                "PACKET_IN_COUNT_MEAN": self.packet_in_count / self.sess_count,
+                "PACKET_IN_COUNT_MEAN": 0 if self.sess_count == 0 else self.packet_in_count / self.sess_count,
                 "PACKET_IN_COUNT_FREQUENCY(top5) (content, freq)": self.frequency.most_common(5),
             }
         )

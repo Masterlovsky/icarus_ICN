@@ -58,13 +58,14 @@ def dump_result_to_csv(input_file: str = "result.pickle", out_file: str = "resul
     with open(out_file, "w") as f:
         # write title
         f.write(
-            "exp_id, topology_scale, workload_name, workload_n_contents, alpha, lp, rate, cache, "
-            "strategy, avg_chr, intra_link_load, inter_link_load, avg_latency, pktin_total, "
-            "pktin_cpr, req_num, resolve_cache, resolve_ctrl, resolve_ibgn, "
-            "resolve_ebgn, avg_cc_cache, avg_cc_ctrl, avg_cc_ibgn, avg_cc_ebgn\n"
+            "exp_id,topology_scale,workload_name,workload_n_contents,alpha,lp,rate,cache,"
+            "strategy,avg_chr,intra_link_load,inter_link_load,avg_latency,pktin_total,"
+            "pktin_cpr,req_num,resolve_cache,resolve_ctrl,resolve_ibgn,"
+            "resolve_ebgn,avg_cc_cache,avg_cc_ctrl,avg_cc_ibgn,avg_cc_ebgn\n"
         )
         exp_numbers = len(data)
         for i in range(exp_numbers):
+            # experiment config data
             exp_id = str(i)
             topology_scale = data[i][0]["topology"]["scale"]
             workload_name = data[i][0]["workload"]["name"]
@@ -74,22 +75,49 @@ def dump_result_to_csv(input_file: str = "result.pickle", out_file: str = "resul
             rate = str(data[i][0]["workload"]["rate"])
             cache = str(data[i][0]["cache_placement"]["network_cache"])
             strategy = data[i][0]["strategy"]["name"]
-            avg_chr = str(data[i][1]["CACHE_HIT_RATIO"]["MEAN"])
-            intra_link_load = str(data[i][1]["LINK_LOAD"]["MEAN_INTERNAL"])
-            inter_link_load = str(data[i][1]["LINK_LOAD"]["MEAN_EXTERNAL"])
-            avg_latency = str(data[i][1]["LATENCY"]["MEAN"])
-            pktin_total = str(data[i][1]["PACKET_IN"]["PACKET_IN_COUNT_TOTAL"])
-            pktin_cpr = str(data[i][1]["PACKET_IN"]["PACKET_IN_COUNT_MEAN"])
-            req_num = str(data[i][1]["LEVEL_HIT"]["TOTAL_REQUEST"])
-            resolve_cache = str(data[i][1]["LEVEL_HIT"]["RESOLVE_CACHE"])
-            resolve_ctrl = str(data[i][1]["LEVEL_HIT"]["RESOLVE_CTRL"])
-            resolve_ibgn = str(data[i][1]["LEVEL_HIT"]["RESOLVE_IBGN"])
-            resolve_ebgn = str(data[i][1]["LEVEL_HIT"]["RESOLVE_EBGN"])
-            avg_cc_cache = str(data[i][1]["LEVEL_HIT"]["CONCURRENCY_CACHE_MEAN"])
-            avg_cc_ctrl = str(data[i][1]["LEVEL_HIT"]["CONCURRENCY_CTRL_MEAN"])
-            avg_cc_ibgn = str(data[i][1]["LEVEL_HIT"]["CONCURRENCY_IBGN_MEAN"])
-            avg_cc_ebgn = str(data[i][1]["LEVEL_HIT"]["CONCURRENCY_EBGN_MEAN"])
-
+            # result data
+            avg_chr = "NULL" if "CACHE_HIT_RATIO" not in data[i][1] else str(
+                data[i][1]["CACHE_HIT_RATIO"]["MEAN"])
+            intra_link_load = "NULL" if "LINK_LOAD" not in data[i][1] else str(
+                data[i][1]["LINK_LOAD"]["MEAN_INTERNAL"])
+            inter_link_load = "NULL" if "LINK_LOAD" not in data[i][1] else str(
+                data[i][1]["LINK_LOAD"]["MEAN_EXTERNAL"])
+            avg_latency = "NULL" if "LATENCY" not in data[i][1] else str(data[i][1]["LATENCY"]["MEAN"])
+            pktin_total = "NULL" if "PACKET_IN" not in data[i][1] else str(
+                data[i][1]["PACKET_IN"]["PACKET_IN_COUNT_TOTAL"])
+            pktin_cpr = "NULL" if "PACKET_IN" not in data[i][1] else str(
+                data[i][1]["PACKET_IN"]["PACKET_IN_COUNT_MEAN"])
+            req_num = "NULL" if "LEVEL_HIT" not in data[i][1] else str(data[i][1]["LEVEL_HIT"]["TOTAL_REQUEST"])
+            resolve_cache = "NULL" if (
+                    "LEVEL_HIT" not in data[i][1] or "RESOLVE_CACHE" not in data[i][1]["LEVEL_HIT"]) else str(
+                data[i][1]["LEVEL_HIT"]["RESOLVE_CACHE"])
+            resolve_ctrl, resolve_ibgn, resolve_ebgn = "NULL", "NULL", "NULL"
+            if "LEVEL_HIT" in data[i][1]:
+                if "RESOLVE_CTRL" in data[i][1]["LEVEL_HIT"]:
+                    resolve_ctrl = str(data[i][1]["LEVEL_HIT"]["RESOLVE_CTRL"])
+                elif "RESOLVE_L1" in data[i][1]["LEVEL_HIT"]:
+                    resolve_ctrl = str(data[i][1]["LEVEL_HIT"]["RESOLVE_L1"])
+                if "RESOLVE_IBGN" in data[i][1]["LEVEL_HIT"]:
+                    resolve_ibgn = str(data[i][1]["LEVEL_HIT"]["RESOLVE_IBGN"])
+                elif "RESOLVE_L2" in data[i][1]["LEVEL_HIT"]:
+                    resolve_ibgn = str(data[i][1]["LEVEL_HIT"]["RESOLVE_L2"])
+                if "RESOLVE_EBGN" in data[i][1]["LEVEL_HIT"]:
+                    resolve_ebgn = str(data[i][1]["LEVEL_HIT"]["RESOLVE_EBGN"])
+                elif "RESOLVE_L3" in data[i][1]["LEVEL_HIT"]:
+                    resolve_ebgn = str(data[i][1]["LEVEL_HIT"]["RESOLVE_L3"])
+            avg_cc_cache = "NULL" if (
+                    "LEVEL_HIT" not in data[i][1] or "CONCURRENCY_CACHE_MEAN" not in data[i][1]["LEVEL_HIT"]) else str(
+                data[i][1]["LEVEL_HIT"]["CONCURRENCY_CACHE_MEAN"])
+            avg_cc_ctrl = "NULL" if (
+                    "LEVEL_HIT" not in data[i][1] or "CONCURRENCY_CTRL_MEAN" not in data[i][1]["LEVEL_HIT"]) else str(
+                data[i][1]["LEVEL_HIT"]["CONCURRENCY_CTRL_MEAN"])
+            avg_cc_ibgn = "NULL" if (
+                    "LEVEL_HIT" not in data[i][1] or "CONCURRENCY_IBGN_MEAN" not in data[i][1]["LEVEL_HIT"]) else str(
+                data[i][1]["LEVEL_HIT"]["CONCURRENCY_IBGN_MEAN"])
+            avg_cc_ebgn = "NULL" if (
+                    "LEVEL_HIT" not in data[i][1] or "CONCURRENCY_EBGN_MEAN" not in data[i][1]["LEVEL_HIT"]) else str(
+                data[i][1]["LEVEL_HIT"]["CONCURRENCY_EBGN_MEAN"])
+            # write data to csv file
             f.write(
                 exp_id + "," + topology_scale + "," + workload_name + "," + workload_n_contents + ","
                 + alpha + "," + lp + "," + rate + "," + cache + "," + strategy + "," + avg_chr + "," +
