@@ -5,6 +5,7 @@ A Script to dump the flows data from result files
 Created on 2022-11-11, powered by Masterlovsky
 Version: 1.0
 """
+import sys
 from collections import defaultdict
 
 from icarus.results.readwrite import *
@@ -71,12 +72,12 @@ def dump_result_to_csv(input_file: str = "result.pickle", out_file: str = "resul
             workload_name = data[i][0]["workload"]["name"]
             workload_n_contents = str(data[i][0]["workload"]["n_contents"])
             alpha = str(data[i][0]["workload"]["alpha"])
-            lp = str(data[i][0]["workload"]["lp"])
+            lp = "NULL" if "lp" not in data[i][0]["workload"] else str(data[i][0]["workload"]["lp"])
             rate = str(data[i][0]["workload"]["rate"])
             cache = str(data[i][0]["cache_placement"]["network_cache"])
             strategy = data[i][0]["strategy"]["name"]
             # result data
-            avg_chr = "NULL" if "CACHE_HIT_RATIO" not in data[i][1] else str(
+            avg_chr = "NULL" if ("CACHE_HIT_RATIO" not in data[i][1] or "MEAN" not in data[i][1]["CACHE_HIT_RATIO"]) else str(
                 data[i][1]["CACHE_HIT_RATIO"]["MEAN"])
             intra_link_load = "NULL" if "LINK_LOAD" not in data[i][1] else str(
                 data[i][1]["LINK_LOAD"]["MEAN_INTERNAL"])
@@ -131,6 +132,8 @@ def dump_result_to_csv(input_file: str = "result.pickle", out_file: str = "resul
 
 if __name__ == '__main__':
     path = "./"
+    if len(sys.argv) > 1:
+        path = sys.argv[1]
     dump_flow_data(path + "results.pickle", path + "flow_data.txt")
     dump_result_to_csv(path + "results.pickle", path + "result.csv")
     print("Done!")
