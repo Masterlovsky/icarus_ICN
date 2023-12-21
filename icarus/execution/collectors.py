@@ -296,8 +296,7 @@ class LinkLoadCollector(DataCollector):
             link: (
                           self.req_size * self.req_count[link]
                           + self.content_size * self.cont_count[link]
-                  )
-                  / duration
+                  ) / duration
             for link in used_links
         }
         link_loads_int = {
