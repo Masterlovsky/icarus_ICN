@@ -152,6 +152,9 @@ class StationaryWorkload:
                 reverse=True,
             )
             self.receiver_dist = TruncatedZipfDist(beta, len(self.receivers))
+        self.req_size_var = False if "req_size_var" not in kwargs else kwargs["req_size_var"]
+        self.req_size_base = 150 if "req_base_size" not in kwargs else kwargs["req_base_size"]
+        self.req_size_sigma = 50 if "req_sigma" not in kwargs else kwargs["req_sigma"]
 
     def __iter__(self):
         req_counter = 0
@@ -164,7 +167,9 @@ class StationaryWorkload:
                 receiver = self.receivers[self.receiver_dist.rv() - 1]
             content = int(self.zipf.rv())
             log = req_counter >= self.n_warmup
-            event = {"receiver": receiver, "content": content, "log": log}
+            req_size = self.req_size_base if not self.req_size_var else int(
+                random.normalvariate(self.req_size_base, self.req_size_sigma))
+            event = {"receiver": receiver, "content": content, "log": log, "size": req_size}
             yield (t_event, event)
             req_counter += 1
         return
@@ -219,6 +224,8 @@ class GlobetraffWorkload:
         self.contents = range(self.n_contents)
         self.request_file = reqs_file
         self.beta = beta
+        self.n_warmup = 0 if "n_warmup" not in kwargs else kwargs["n_warmup"]
+        self.n_measured = self.n_contents if "n_measured" not in kwargs else kwargs["n_measured"]
         if beta != 0:
             degree = nx.degree(self.topology)
             self.receivers = sorted(
@@ -230,14 +237,19 @@ class GlobetraffWorkload:
 
     def __iter__(self):
         with open(self.request_file) as f:
+            req_counter = 0
             reader = csv.reader(f, delimiter="\t")
             for timestamp, content, size in reader:
                 if self.beta == 0:
                     receiver = random.choice(self.receivers)
                 else:
                     receiver = self.receivers[self.receiver_dist.rv() - 1]
-                event = {"receiver": receiver, "content": content, "size": size}
-                yield (timestamp, event)
+                log = req_counter >= self.n_warmup
+                event = {"receiver": receiver, "content": content, "log": log, "size": size}
+                req_counter += 1
+                if req_counter >= self.n_warmup + self.n_measured:
+                    return
+                yield timestamp, event
         return
 
 
@@ -646,7 +658,8 @@ class REALWorkload(object):
                 for i in tqdm(range(len(rec_df)), desc="rec_val_dict_init"):
                     for j in range(1, len(rec_df.iloc[i]) + 1):
                         if not pd.isna(rec_df.iloc[i][j]):
-                            self.rec_val_dict[self.ip_city_dict[rec_df.iloc[i].name]].append((rec_df.iloc[i][j], val_df.iloc[i][j]))
+                            self.rec_val_dict[self.ip_city_dict[rec_df.iloc[i].name]].append(
+                                (rec_df.iloc[i][j], val_df.iloc[i][j]))
                 # save rec_val_dict to cache
                 pickle.dump(self.rec_val_dict, open(rec_val_cache_f, "wb"))
             else:

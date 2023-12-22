@@ -165,7 +165,12 @@ class IcnTopology(fnss.Topology):
         with open(filename, "w") as f:
             f.write(str(len(self.nodes())) + " " + str(len(self.edges())) + "\n")
             for u, v in self.edges():
-                f.write(str(u) + " " + str(v) + " " + str("1") + " " + str("1") + "\n")
+                cat_u, cat_v = 1, 1
+                if "stack" in self.node[u] and "asn" in self.node[u]["stack"][1]:
+                    cat_u = self.node[u]["stack"][1]["asn"]
+                if "stack" in self.node[v] and "asn" in self.node[v]["stack"][1]:
+                    cat_v = self.node[v]["stack"][1]["asn"]
+                f.write(str(u) + " " + str(v) + " " + str(cat_u) + " " + str(cat_v) + "\n")
 
     def dump_topology_info(self, filename="node_type.txt"):
         """

@@ -157,14 +157,14 @@ class SEANRS(Strategy):
         return n_sw_list, bgn_next
 
     @inheritdoc(Strategy)
-    def process_event(self, time, receiver, content, log):
+    def process_event(self, time, receiver, content, log, **kwargs):
         """
         Process a content request event
         ===== Main process of SEANet routing strategy =====
         """
         # * >>> 1. route content to the access switch <<<
         acc_switch = self.view.get_access_switch(receiver)
-        self.controller.start_session(time, receiver, content, log)
+        self.controller.start_session(time, receiver, content, log, **kwargs)
         # route the request from receiver to access switch
         self.controller.forward_request_path(receiver, acc_switch)
 
@@ -255,7 +255,7 @@ class SEACACHE(Strategy):
         source = self.view.content_source(content)
         path = self.view.shortest_path(receiver, source)
         # Route requests to original source and queries caches on the path
-        self.controller.start_session(time, receiver, content, log)
+        self.controller.start_session(time, receiver, content, log, **kwargs)
         serving_node = None
         for u, v in path_links(path):
             self.controller.forward_request_hop(u, v)

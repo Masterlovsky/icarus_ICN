@@ -861,7 +861,7 @@ class NetworkController:
         """Detach the data collector."""
         self.collector = None
 
-    def start_session(self, timestamp, receiver, content, log):
+    def start_session(self, timestamp, receiver, content, log, **kwargs):
         """Instruct the controller to start a new session (i.e. the retrieval
         of a content).
 
@@ -876,12 +876,14 @@ class NetworkController:
         log : bool
             *True* if this session needs to be reported to the collector,
             *False* otherwise
+        kwargs: dict
+            Additional keyworded arguments
         """
         self.session = dict(
             timestamp=timestamp, receiver=receiver, content=content, log=log
         )
         if self.collector is not None and self.session["log"]:
-            self.collector.start_session(timestamp, receiver, content)
+            self.collector.start_session(timestamp, receiver, content, **kwargs)
 
     def forward_request_path(self, s, t, path=None, main_path=True):
         """Forward a request from node *s* to node *t* over the provided path.

@@ -197,9 +197,9 @@ class CollectorProxy(DataCollector):
         }
 
     @inheritdoc(DataCollector)
-    def start_session(self, timestamp, receiver, content):
+    def start_session(self, timestamp, receiver, content, **kwargs):
         for c in self.collectors["start_session"]:
-            c.start_session(timestamp, receiver, content)
+            c.start_session(timestamp, receiver, content, **kwargs)
 
     @inheritdoc(DataCollector)
     def cache_hit(self, node):
@@ -267,22 +267,27 @@ class LinkLoadCollector(DataCollector):
         self.view = view
         self.req_count = collections.defaultdict(int)
         self.cont_count = collections.defaultdict(int)
+        self.req_load = collections.defaultdict(int)
+        # self.cont_load = collections.defaultdict(int)
         if req_size <= 0 or content_size < 0:
             raise ValueError("req_size and content_size must be positive")
-        self.req_size = req_size
+        self.base_req_size = req_size
+        self.req_size = self.base_req_size
         self.content_size = content_size
         self.t_start = -1
         self.t_end = 1
 
     @inheritdoc(DataCollector)
-    def start_session(self, timestamp, receiver, content):
+    def start_session(self, timestamp, receiver, content, **kwargs):
         if self.t_start < 0:
             self.t_start = timestamp
         self.t_end = timestamp
+        self.req_size = self.base_req_size if "size" not in kwargs else kwargs["size"]
 
     @inheritdoc(DataCollector)
     def request_hop(self, u, v, main_path=True):
         self.req_count[(u, v)] += 1
+        self.req_load[(u, v)] += self.req_size
 
     @inheritdoc(DataCollector)
     def content_hop(self, u, v, main_path=True):
@@ -293,10 +298,7 @@ class LinkLoadCollector(DataCollector):
         duration = self.t_end - self.t_start
         used_links = set(self.req_count.keys()).union(set(self.cont_count.keys()))
         link_loads = {
-            link: (
-                          self.req_size * self.req_count[link]
-                          + self.content_size * self.cont_count[link]
-                  ) / duration
+            link: (self.req_load[link] + self.content_size * self.cont_count[link]) / duration
             for link in used_links
         }
         link_loads_int = {
@@ -372,7 +374,7 @@ class LatencyCollector(DataCollector):
             self.latency_data = collections.deque()
 
     @inheritdoc(DataCollector)
-    def start_session(self, timestamp, receiver, content):
+    def start_session(self, timestamp, receiver, content, **kwargs):
         self.sess_count += 1
         self.sess_latency = 0.0
 
@@ -448,7 +450,7 @@ class CacheHitRatioCollector(DataCollector):
             self.cont_serv_hits = collections.defaultdict(int)
 
     @inheritdoc(DataCollector)
-    def start_session(self, timestamp, receiver, content):
+    def start_session(self, timestamp, receiver, content, **kwargs):
         self.sess_count += 1
         if self.off_path_hits:
             source = self.view.content_source(content)
@@ -551,7 +553,7 @@ class PathStretchCollector(DataCollector):
             self.stretch_data = collections.deque()
 
     @inheritdoc(DataCollector)
-    def start_session(self, timestamp, receiver, content):
+    def start_session(self, timestamp, receiver, content, **kwargs):
         self.receiver = receiver
         self.source = self.view.content_source(content)
         self.req_path_len = 0
@@ -616,7 +618,7 @@ class DummyCollector(DataCollector):
         self.view = view
 
     @inheritdoc(DataCollector)
-    def start_session(self, timestamp, receiver, content):
+    def start_session(self, timestamp, receiver, content, **kwargs):
         self.session = dict(
             timestamp=timestamp,
             receiver=receiver,
@@ -688,7 +690,7 @@ class PacketInCollector(DataCollector):
             self.packet_in_data = collections.deque()
 
     @inheritdoc(DataCollector)
-    def start_session(self, timestamp, receiver, content):
+    def start_session(self, timestamp, receiver, content, **kwargs):
         self.sess_count += 1
         self.sess_packet_in_count = 0
 
@@ -751,7 +753,7 @@ class LEVEL_HIT_Collector(DataCollector):
         self.t_end = 1
 
     @inheritdoc(DataCollector)
-    def start_session(self, timestamp, receiver, content):
+    def start_session(self, timestamp, receiver, content, **kwargs):
         self.total_request[content] = self.total_request.get(content, 0) + 1
         if self.t_start < 0:
             self.t_start = timestamp
@@ -840,7 +842,7 @@ class SwitchFreeSpaceRatioCollector(DataCollector):
         self.per_node = per_node
 
     @inheritdoc(DataCollector)
-    def start_session(self, timestamp, receiver, content):
+    def start_session(self, timestamp, receiver, content, **kwargs):
         pass
 
     @inheritdoc(DataCollector)
