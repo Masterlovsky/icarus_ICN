@@ -197,7 +197,7 @@ class GlobetraffWorkload:
         The topology to which the workload refers
     reqs_file : str
         The GlobeTraff request file
-    contents_file : str
+    content_file : str
         The GlobeTraff content file
     beta : float, optional
         Spatial skewness of requests rates
@@ -210,19 +210,21 @@ class GlobetraffWorkload:
         dictionary of event attributes.
     """
 
-    def __init__(self, topology, reqs_file, contents_file, beta=0, **kwargs):
+    def __init__(self, topology, reqs_file, content_file, beta=0, **kwargs):
         """Constructor"""
+        self.topology = topology
         if beta < 0:
             raise ValueError("beta must be positive")
         self.receivers = get_nodes_with_type(topology, "receiver")
         self.n_contents = 0
-        with open(contents_file) as f:
-            reader = csv.reader(f, delimiter="\t")
+        self.content_file = WORKLOAD_RESOURCES_DIR + content_file
+        with open(self.content_file) as f:
+            reader = csv.reader(f, delimiter=",")
             for content, popularity, size, app_type in reader:
-                self.n_contents = max(self.n_contents, content)
+                self.n_contents = max(self.n_contents, int(content))
         self.n_contents += 1
         self.contents = range(self.n_contents)
-        self.request_file = reqs_file
+        self.request_file = WORKLOAD_RESOURCES_DIR + reqs_file
         self.beta = beta
         self.n_warmup = 0 if "n_warmup" not in kwargs else kwargs["n_warmup"]
         self.n_measured = self.n_contents if "n_measured" not in kwargs else kwargs["n_measured"]
@@ -238,18 +240,23 @@ class GlobetraffWorkload:
     def __iter__(self):
         with open(self.request_file) as f:
             req_counter = 0
-            reader = csv.reader(f, delimiter="\t")
-            for timestamp, content, size in reader:
+            reader = csv.reader(f, delimiter=",")
+            for timestamp, content, size, duration in reader:
                 if self.beta == 0:
                     receiver = random.choice(self.receivers)
                 else:
                     receiver = self.receivers[self.receiver_dist.rv() - 1]
                 log = req_counter >= self.n_warmup
-                event = {"receiver": receiver, "content": content, "log": log, "size": size}
+                try:
+                    event = {"receiver": receiver, "content": int(content), "log": log, "size": float(size),
+                             "duration": float(duration)}
+                except:
+                    print("Error in parsing line: Timestamp: {}, content: {}, size: {}, duration: {}".format(
+                        timestamp, content, size, duration))
                 req_counter += 1
                 if req_counter >= self.n_warmup + self.n_measured:
                     return
-                yield timestamp, event
+                yield float(timestamp), event
         return
 
 

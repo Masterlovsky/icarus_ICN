@@ -27,3 +27,4 @@ Click
 matplotlib
 setuptools
 tqdm
+sortedcontainers

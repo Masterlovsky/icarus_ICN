@@ -1,18 +1,30 @@
 """Implementations of SEANet strategies"""
+import logging
 import random
 
-from icarus.registry import register_strategy
-from icarus.util import inheritdoc, path_links, sigmoid, exp_map_to_01
 from icarus.execution.simulation_time import Sim_T
+from icarus.registry import register_strategy
+from icarus.util import inheritdoc, path_links
 from .base import Strategy
-import logging
 
 __all__ = [
     "SEANRS",
     "SEACACHE",
+    "SEALOC",
 ]
 
 logger = logging.getLogger("SEANRS-strategy")
+
+
+def normalize(link_status_map):
+    """normalize values in map to [0, 1]"""
+    max_val = max(link_status_map.values())
+    min_val = min(link_status_map.values())
+    for k, v in link_status_map.items():
+        if max_val == min_val:
+            link_status_map[k] = 0.5
+        else:
+            link_status_map[k] = (v - min_val) / (max_val - min_val)
 
 
 @register_strategy("SEANRS")
@@ -307,3 +319,101 @@ class SEACACHE(Strategy):
 
         self.controller.end_session()
         # print(Sim_T.get_sim_time())
+
+
+@register_strategy("SEALOC")
+class SEALOC(Strategy):
+    """
+    SEANet locator selection strategy, simulation in one controller domain.
+    """
+
+    def __init__(self, view, controller, **kwargs):
+        super().__init__(view, controller)
+        self.alpha = kwargs.get("alpha", 0.1)
+        self.view.topology().dump_topology_info()
+        self.view.topology().gen_topo_file()
+        self.method = kwargs.get("method", "main")
+        # set weight_link for each web matrix, [capacity, latency, packet loss]
+        self.weight_link = [0.5, 0.5, 0] if "weight_link" not in kwargs else kwargs["weight_link"]
+        self.weight = [0.5, 0.5] if "weight" not in kwargs else kwargs["weight"]
+
+    def G(self, dst_freq: dict, link_stats: dict, locs: list) -> list:
+        """
+        The function G is used to calculate the utility value of each location.
+        return a pdf for locations
+        """
+        final_stats = []
+        for loc in locs:
+            final_stats.append(self.weight[0] * dst_freq[loc] + self.weight[1] * link_stats[loc])
+        # turn to pdf
+        final_stats = [x / sum(final_stats) for x in final_stats]
+        return final_stats
+
+    def process_event(self, time, receiver, content, log, **kwargs):
+        """
+        ===== Main process of SEANet locator selection strategy =====
+        kwargs:
+            size: request size
+        """
+        req_size = kwargs.get("size", 1)
+        duration = kwargs.get("duration", 1)
+        self.controller.start_session(time, receiver, content, log, **kwargs)
+        acc_switch = self.view.get_access_switch(receiver)
+        self.controller.forward_request_path(receiver, acc_switch)
+        self.controller.packet_in(content)
+
+        # ! 1. resolution module: get all locations of content
+        locs = self.view.content_locations(content)
+        # ! 2. frequency module: get dst_frequency for each location
+        dst_frequency = {loc: self.view.get_dst_freq(loc) for loc in locs}
+        # ! 3. statistic module: get the next hop link status for each location
+        link_status = {}
+        loc2hop = {}
+        link_delays, link_capacities, link_losses = {}, {}, {}
+        for loc in locs:
+            next_hop_link = path_links(self.view.shortest_path(acc_switch, loc))[0]
+            loc2hop[loc] = next_hop_link
+            if next_hop_link in link_capacities:
+                continue
+            # get the link status
+            link_capacities[next_hop_link] = self.view.link_capacity_avail(*next_hop_link, time)
+            link_delays[next_hop_link] = self.view.link_delay(*next_hop_link)
+            link_losses[next_hop_link] = self.view.link_loss_rate(*next_hop_link)
+        # normalize the link_delays, link_capacities, link_losses
+        normalize(link_delays)
+        normalize(link_capacities)
+        normalize(link_losses)
+        # calculate the link status
+        for loc in locs:
+            next_hop_link = loc2hop[loc]
+            link_status[loc] = self.weight_link[0] * link_capacities[next_hop_link] + \
+                               self.weight_link[1] * link_delays[next_hop_link] + \
+                               self.weight_link[2] * link_losses[next_hop_link]
+        # ! 4. select the best location use the above information
+        if self.method == "main":
+            # get the location with the adaptive address selection method
+            # choose one location from locs according to the pdf
+            locs_l = list(locs)
+            target_loc = random.choices(locs_l, weights=self.G(dst_frequency, link_status, locs_l))[0]
+        elif self.method == "ecmp":
+            # Select the minimum destination frequency location
+            target_loc = min(dst_frequency, key=dst_frequency.get)
+        elif self.method == "random":
+            target_loc = random.choice(list(locs))
+        elif self.method == "onlystates":
+            # get the location with the highest link_status
+            target_loc = max(link_status, key=link_status.get)
+        else:
+            raise ValueError("method should be one of ['main', 'ecmp', 'onlystates']")
+        # ! 5. route the request to the selected location and get content back
+        self.controller.forward_request_path(acc_switch, target_loc)
+        self.controller.get_content(target_loc)
+        self.controller.forward_content_path(target_loc, receiver)
+        # ! 6. update the status of the link, update the dst_frequency
+        target_link = loc2hop[target_loc]
+        # At time, the capacity usage on the link increases by req_size
+        self.controller.update_link_capacity_used(*target_link, time, req_size)
+        # At time + duration, the capacity usage on the link decreases by req_size
+        self.controller.update_link_capacity_used(*target_link, time + duration, -req_size)
+        self.controller.update_dst_freq(target_loc, Sim_T.get_sim_time())
+        self.controller.end_session()

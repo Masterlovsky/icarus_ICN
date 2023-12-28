@@ -37,6 +37,7 @@ __all__ = [
     "topology_seanrs_complete",
     "topology_seanrs",
     "topology_nrs_cache",
+    "topology_tiscali_sea",
 ]
 
 # Delays
@@ -219,7 +220,7 @@ def largest_connected_component_subgraph(topology):
 
     Parameters
     ----------
-    topology : IcnTopology
+    topology : Topology
         The topology object
 
     Returns
@@ -1203,4 +1204,88 @@ def topology_nrs_cache(k, l=3, h=1, delay=1, **kwargs):
     # label links as internal
     for u, v in topology.edges():
         topology.adj[u][v]["type"] = "internal"
+    return IcnTopology(topology)
+
+
+@register_topology_factory("TISCALI_SEA")
+def topology_tiscali_sea(**kwargs):
+    """Return a scenario based on Tiscali topology, parsed from RocketFuel dataset, SEANet format.
+
+    Parameters
+    ----------
+    seed : int, optional
+        The seed used for random number generation
+
+    Returns
+    -------
+    topology : fnss.Topology
+        The topology object
+    """
+    # 240 nodes in the main component
+    topology = fnss.parse_rocketfuel_isp_map(
+        path.join(TOPOLOGY_RESOURCES_DIR, "3257.r0.cch")
+    ).to_undirected()
+    topology = largest_connected_component_subgraph(topology)
+    # degree of nodes
+    deg = nx.degree(topology)
+    # nodes with degree = 1
+    onedeg = [v for v in topology.nodes() if deg[v] == 1]  # they are 80
+    # we select as caches nodes with highest degrees
+    # we use as min degree 6 --> 36 nodes
+    # If we changed min degrees, that would be the number of caches we would have:
+    # Min degree    N caches
+    #  2               160
+    #  3               102
+    #  4                75
+    #  5                50
+    #  6                36
+    #  7                30
+    #  8                26
+    #  9                19
+    # 10                16
+    # 11                12
+    # 12                11
+    # 13                 7
+    # 14                 3
+    # 15                 3
+    # 16                 2
+    icr_candidates = [v for v in topology.nodes() if deg[v] >= 6]  # 36 nodes
+    # sources are node with degree 1 whose neighbor has degree at least equal to 5
+    # we assume that sources are nodes connected to a hub
+    # they are 44
+    sources = [v for v in onedeg if deg[list(topology.adj[v].keys())[0]] > 4.5]
+    # receivers are node with degree 1 whose neighbor has degree at most equal to 4
+    # we assume that receivers are nodes not well connected to the network
+    # they are 36
+    receivers = [v for v in onedeg if deg[list(topology.adj[v].keys())[0]] < 4.5]
+    # switches are nodes which directly connected to sources and receivers
+    switches = [list(topology.adj[v].keys())[0] for v in onedeg]
+    # we set router stacks because some strategies will fail if no stacks are deployed
+    routers = [v for v in topology.nodes() if v not in sources + receivers + switches]
+
+    # set weights, delays and capacities on all links
+    fnss.set_weights_constant(topology, 1.0)
+    fnss.set_delays_constant(topology, INTERNAL_LINK_DELAY, "ms")
+    fnss.set_capacities_constant(topology, 10**10, "Bps")
+
+    # Deploy stacks
+    topology.graph["icr_candidates"] = set(icr_candidates)
+    for v in sources:
+        fnss.add_stack(topology, v, "source")
+    for v in receivers:
+        fnss.add_stack(topology, v, "receiver", {"sw": list(topology.adj[v].keys())[0]})
+    for v in switches:
+        fnss.add_stack(topology, v, "switch")
+    for v in routers:
+        fnss.add_stack(topology, v, "router")
+
+    # label links as internal or external
+    for u, v in topology.edges():
+        if u in sources or v in sources:
+            topology.adj[u][v]["type"] = "external"
+            # this prevents sources to be used to route traffic
+            fnss.set_weights_constant(topology, 1000.0, [(u, v)])
+            fnss.set_delays_constant(topology, EXTERNAL_LINK_DELAY, "ms", [(u, v)])
+        else:
+            topology.adj[u][v]["type"] = "internal"
     return IcnTopology(topology)

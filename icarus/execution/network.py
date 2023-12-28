@@ -15,7 +15,7 @@ of all relevant events.
 import bisect
 import logging
 from collections import defaultdict
-
+from sortedcontainers import SortedList
 import fnss
 import mmh3
 import networkx as nx
@@ -100,9 +100,9 @@ class NetworkView:
             A set of all nodes currently storing the given content
         """
         loc = {v for v in self.model.cache if self.model.cache[v].has(k)}
-        source = self.content_source(k)
+        source = self.model.content_source.get(k)  # a list of source node
         if source:
-            loc.add(source)
+            loc.update(source)
         return loc
 
     def content_source(self, k):
@@ -119,7 +119,8 @@ class NetworkView:
             The node persistently storing the given content or None if the
             source is unavailable
         """
-        return self.model.content_source.get(k, None)
+        src = self.model.content_source.get(k)
+        return src[0] if src else None
 
     def get_access_switch(self, v):
         """
@@ -263,6 +264,21 @@ class NetworkView:
         if len(timestamp_l) == 0 or len(timestamp_l) == 1:
             return 0
         return len(timestamp_l) / (timestamp_l[-1] - timestamp_l[0])
+
+    def get_dst_freq(self, v):
+        """Return the frequency of choose node v as destination node
+
+        Parameters
+        ----------
+        v : int
+            The destination node
+
+        Returns
+        -------
+        freq : int
+            The frequency of choose node v as destination node
+        """
+        return self.model.dst_node_freq_tracker.get_instantaneous_frequency(v, Sim_T.get_sim_time())
 
     def get_content_pop(self, k):
         """Return the popularity of content
@@ -550,6 +566,60 @@ class NetworkView:
         """
         return self.model.link_delay[(u, v)]
 
+    def link_capacity(self, u, v):
+        """Return the capacity of link *(u, v)*.
+
+        Parameters
+        ----------
+        u : any hashable type
+            Origin node
+        v : any hashable type
+            Destination node
+
+        Returns
+        -------
+        capacity : float
+            The link capacity
+        """
+        if (u, v) not in self.model.link_capacity:
+            return 0
+        return self.model.link_capacity[(u, v)]
+
+    def link_capacity_avail(self, u, v, ts):
+        """Return the available capacity of link *(u, v)*.
+
+        Parameters
+        ----------
+        u : any hashable type
+            Origin node
+        v : any hashable type
+            Destination node
+        ts : float
+            The time at which the capacity is queried
+        Returns
+        -------
+        capacity : float
+            The link capacity
+        """
+        total_cap = max(self.link_capacity(u, v), self.link_capacity(v, u))
+        if total_cap == 0:
+            logger.warning("Link (%s, %s) has zero capacity!", u, v)
+        used_capacity = 0
+        if (u, v) in self.model.link_capacity_used:
+            used_ts_cp_l = self.model.link_capacity_used[(u, v)]  # [(timestamp, capacity), ...]
+            # use bisect to find the index of ts in self.model.link_capacity_used[(u, v)]
+            index = bisect.bisect_right([ts for ts, _ in used_ts_cp_l], ts)
+            # and sum the capacity before ts
+            used_capacity = sum([cp for _, cp in used_ts_cp_l[:index]])
+        elif (v, u) in self.model.link_capacity_used:
+            used_ts_cp_l = self.model.link_capacity_used[(v, u)]
+            index = bisect.bisect_right([ts for ts, _ in used_ts_cp_l], ts)
+            used_capacity = sum([cp for _, cp in used_ts_cp_l[:index]])
+        return total_cap - used_capacity
+
+    def link_loss_rate(self, u, v):
+        return 0
+
     def topology(self):
         """Return the network topology
 
@@ -749,7 +819,7 @@ class NetworkModel:
         self.workload = workload
         # Dictionary mapping each content object to its source
         # dict of location of contents keyed by content ID
-        self.content_source = {}
+        self.content_source = defaultdict(list)
         # Dictionary mapping the reverse, i.e. nodes to set of contents stored
         self.source_node = {}
         # Dictionary mapping each content request frequency {c: [t1, t2, ...]}
@@ -759,10 +829,16 @@ class NetworkModel:
         # list of content objects and their popularity [(c1, p1), (c2, p2), ...], read from file
         self.content_pop = []
         self.content_pop_max = 0
+        # frequency of choose node v as destination node {v: [t1, t2, ...]}
+        self.dst_node_freq_tracker = TimeWindowFrequencyTracker()
 
         # Dictionary of link types (internal/external)
         self.link_type = nx.get_edge_attributes(topology, "type")
         self.link_delay = fnss.get_delays(topology)
+        # Dictionary of link capacities
+        self.link_capacity = fnss.get_capacities(topology)
+        # 创建一个字典，key是边，value是边的每个时刻的消耗带宽，正值表示带宽消耗，负值表示带宽释放，按照时刻排序
+        self.link_capacity_used = defaultdict(SortedList)
         # Instead of this manual assignment, I could have converted the
         # topology to directed before extracting type and link delay but that
         # requires a deep copy of the topology that can take long time if
@@ -783,7 +859,7 @@ class NetworkModel:
                 contents = stack_props.get("contents", [])
                 self.source_node[node] = contents
                 for content in contents:
-                    self.content_source[content] = node
+                    self.content_source[content].append(node)
         if any(c < 1 for c in cache_size.values()):
             logger.warning(
                 "Some content caches have size equal to 0. "
@@ -1231,7 +1307,7 @@ class NetworkController:
         if v in self.model.removed_sources:
             self.model.source_node[v] = self.model.removed_sources.pop(v)
             for content in self.model.source_node[v]:
-                self.model.content_source[content] = v
+                self.model.content_source[content].append(v)
         if recompute_paths:
             shortest_path = dict(nx.all_pairs_dijkstra_path(self.model.topology))
             self.model.shortest_path = symmetrify_paths(shortest_path)
@@ -1302,6 +1378,32 @@ class NetworkController:
         """
         if node in self.model.local_cache:
             return self.model.local_cache[node].put(self.session["content"])
+
+    def update_dst_freq(self, v, timestamp):
+        """Add timestamp to frequency tracker.
+
+        Parameters
+        ----------
+        v : any hashable type
+            The node to query
+        timestamp : int
+            The timestamp of the event
+        """
+        self.model.dst_node_freq_tracker.add_timestamp(v, timestamp)
+
+    def update_link_capacity_used(self, u, v, timestamp, capacity):
+        """Update the link capacity used.
+
+        Parameters
+        ----------
+        u, v : any hashable type
+            endpoints of link
+        timestamp : int
+            The timestamp of the event
+        capacity : float
+            The capacity to be updated
+        """
+        self.model.link_capacity_used[(u, v)].add((timestamp, capacity))
 
 
 # A ICN-SEANet NETWORK MODEL CLASS extent NetworkModel
