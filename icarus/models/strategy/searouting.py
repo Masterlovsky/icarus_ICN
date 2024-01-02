@@ -364,8 +364,10 @@ class SEALOC(Strategy):
 
         # ! 1. resolution module: get all locations of content
         locs = self.view.content_locations(content)
+
         # ! 2. frequency module: get dst_frequency for each location
         dst_frequency = {loc: self.view.get_dst_freq(loc) for loc in locs}
+
         # ! 3. statistic module: get the next hop link status for each location
         link_status = {}
         loc2hop = {}
@@ -376,7 +378,7 @@ class SEALOC(Strategy):
             if next_hop_link in link_capacities:
                 continue
             # get the link status
-            link_capacities[next_hop_link] = self.view.link_capacity_avail(*next_hop_link, time)
+            link_capacities[next_hop_link] = max(self.view.link_capacity_avail(*next_hop_link, time), 0)
             link_delays[next_hop_link] = self.view.link_delay(*next_hop_link)
             link_losses[next_hop_link] = self.view.link_loss_rate(*next_hop_link)
         # normalize the link_delays, link_capacities, link_losses
@@ -389,26 +391,30 @@ class SEALOC(Strategy):
             link_status[loc] = self.weight_link[0] * link_capacities[next_hop_link] + \
                                self.weight_link[1] * link_delays[next_hop_link] + \
                                self.weight_link[2] * link_losses[next_hop_link]
+
         # ! 4. select the best location use the above information
+        locs_l = sorted(locs)
         if self.method == "main":
             # get the location with the adaptive address selection method
-            # choose one location from locs according to the pdf
-            locs_l = list(locs)
             target_loc = random.choices(locs_l, weights=self.G(dst_frequency, link_status, locs_l))[0]
-        elif self.method == "ecmp":
+        elif self.method == "first":
+            target_loc = locs_l[0]
+        elif self.method == "onlyfreq":
             # Select the minimum destination frequency location
             target_loc = min(dst_frequency, key=dst_frequency.get)
         elif self.method == "random":
-            target_loc = random.choice(list(locs))
+            target_loc = random.choice(locs_l)
         elif self.method == "onlystates":
             # get the location with the highest link_status
             target_loc = max(link_status, key=link_status.get)
         else:
-            raise ValueError("method should be one of ['main', 'ecmp', 'onlystates']")
+            raise ValueError("method should be one of ['main', 'ecmp', 'onlystates', 'onlyfreq', 'random']")
+
         # ! 5. route the request to the selected location and get content back
         self.controller.forward_request_path(acc_switch, target_loc)
         self.controller.get_content(target_loc)
         self.controller.forward_content_path(target_loc, receiver)
+
         # ! 6. update the status of the link, update the dst_frequency
         target_link = loc2hop[target_loc]
         # At time, the capacity usage on the link increases by req_size

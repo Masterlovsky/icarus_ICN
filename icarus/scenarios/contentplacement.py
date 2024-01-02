@@ -106,7 +106,7 @@ def weighted_content_placement(topology, contents, source_weights, seed=None):
 
 
 @register_content_placement("REDUNDANT")
-def redundant_content_placement(topology, contents, content_file, source_weights=None):
+def redundant_content_placement(topology, contents, content_file, source_weights=None, seed=None):
     """
     In practical scenarios, a content will be cached by multiple source nodes.
     The strategy implemented here is redundant storage.
@@ -121,6 +121,7 @@ def redundant_content_placement(topology, contents, content_file, source_weights
             the weight_link according to which content placement decision is made.
     content_file : file
             content csv file, (content, popularity, size, app_type)
+    seed : any hashable type, optional
     """
     if source_weights is None:
         source_weights = {v: 1 for v in get_sources(topology)}
@@ -149,11 +150,15 @@ def redundant_content_placement(topology, contents, content_file, source_weights
     for c in content_pdf:
         content_list.extend([c] * max(1, int(content_pdf[c] / target_pop)))
     # shuffle the content list
-    random.shuffle(content_list)
+    # random.shuffle(content_list)
     # assign the content to source nodes
     # print(content_list)
+    # choose any source node use source_pdf with seed
+    random.seed(seed)
     for c in content_list:
-        content_placement[random_from_pdf(source_pdf)].add(c)
+        content_placement[random.choice(list(source_pdf.keys()))].add(c)
+    # for c in content_list:
+    #     content_placement[random_from_pdf(source_pdf)].add(c)
     apply_content_placement(content_placement, topology)
     return content_placement
 

@@ -1266,7 +1266,7 @@ def topology_tiscali_sea(**kwargs):
     # set weights, delays and capacities on all links
     fnss.set_weights_constant(topology, 1.0)
     fnss.set_delays_constant(topology, INTERNAL_LINK_DELAY, "ms")
-    fnss.set_capacities_constant(topology, 10**10, "Bps")
+    fnss.set_capacities_constant(topology, 10**8, "Bps")
 
     # Deploy stacks
     topology.graph["icr_candidates"] = set(icr_candidates)

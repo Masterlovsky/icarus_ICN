@@ -28,6 +28,7 @@ __all__ = [
     "PacketInCollector",
     "LEVEL_HIT_Collector",
     "SwitchFreeSpaceRatioCollector",
+    "SourceLoadCollector",
 ]
 
 
@@ -862,6 +863,49 @@ class SwitchFreeSpaceRatioCollector(DataCollector):
             {
                 "SEQ_FREE_SPACE_RATIO": self.free_space_ratio,
                 "AVG_FREE_SPACE_RATIO": sum(self.free_space_ratio.values()) / len(self.free_space_ratio),
+            }
+        )
+        return results
+
+
+@register_data_collector("SOURCE_LOAD")
+class SourceLoadCollector(DataCollector):
+    """
+    Collect load for all the ICN sources. Use the server requested times to calculate the load.
+    """
+
+    def __init__(self, view, per_node=False):
+        super().__init__(view)
+        self.ts = None
+        self.source_load = []  # [timestamp]
+        self.per_node_source_load = collections.defaultdict(list)  # node: [timestamp]
+        self.per_node = per_node
+
+    @inheritdoc(DataCollector)
+    def start_session(self, timestamp, receiver, content, **kwargs):
+        self.ts = timestamp
+
+    @inheritdoc(DataCollector)
+    def server_hit(self, node):
+        self.source_load.append(self.ts)
+        self.per_node_source_load[node].append(self.ts)
+
+    @inheritdoc(DataCollector)
+    def end_session(self, success=True):
+        if not success:
+            return
+
+    @inheritdoc(DataCollector)
+    def results(self):
+        source_num = len(self.view.topology().sources())
+        pnsl = {node: len(ts) / ts[-1] for node, ts in self.per_node_source_load.items()}
+        nsd = np.std(list(pnsl.values()))
+        results = Tree(
+            {
+                "AVG_SOURCE_LOAD": len(self.source_load) / self.source_load[-1] / source_num,
+                "PER_NODE_SOURCE_LOAD": pnsl,
+                "MAX_SOURCE_LOAD": max(pnsl.values()),
+                "STD_SOURCE_LOAD": nsd / (max(pnsl.values()) - min(pnsl.values()))
             }
         )
         return results

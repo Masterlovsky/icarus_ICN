@@ -33,7 +33,7 @@ RESULTS_FORMAT = "PICKLE"
 # List of metrics to be measured in the experiments
 # The implementation of data collectors are located in ./icarus/execution/collectors.py
 # DATA_COLLECTORS = ["CACHE_HIT_RATIO", "FREE_SPACE"]
-DATA_COLLECTORS = ["LINK_LOAD"]
+DATA_COLLECTORS = ["LINK_LOAD", "SOURCE_LOAD"]
 
 # Number of requests per second (over the whole network)
 REQ_RATE = 10
@@ -62,6 +62,7 @@ experiment["cache_placement"]["network_cache"] = 0.1
 # Set content placement
 experiment["content_placement"]["name"] = "REDUNDANT"
 experiment["content_placement"]["content_file"] = "/P3/darknet_processed/content_file.csv"
+experiment["content_placement"]["seed"] = 2024
 
 # Set cache replacement policy
 experiment["cache_policy"]["name"] = "LRU"
@@ -71,23 +72,24 @@ experiment["cache_policy"]["t0"] = 10 * 60
 # Set caching meta-policy
 # experiment["strategy"]["name"] = "LCE"
 experiment["strategy"]["name"] = "SEALOC"
-experiment["strategy"]["method"] = "main"  # {"main", "ecmp", "onlystates", "random"}
+experiment["strategy"]["method"] = "main"  # {"main", "first", "onlystates", "onlyfreq", "random"}
 
 # Description of the experiment
-experiment["desc"] = "SEACACHE cache hit ration with different alpha"
+experiment["desc"] = "SEALOC / method: main / workload: darknet_processed"
 
 # Append experiment to queue
-# EXPERIMENT_QUEUE.append(experiment)
+EXPERIMENT_QUEUE.append(experiment)
 
 # Copy experiment, change parameters and append to queue
 # --------- experiment 1: different method ---------
-for method in ("main", "ecmp", "onlystates", "random"):
-    for workload in ("darknet_processed", "sdn_processed"):
-        for i in range(1):
-            extra_experiment = copy.deepcopy(experiment)
-            extra_experiment["workload"]["reqs_file"] = "/P3/{}/req_file.csv".format(workload)
-            extra_experiment["workload"]["content_file"] = "/P3/{}/content_file.csv".format(workload)
-            extra_experiment["strategy"]["method"] = method
-            extra_experiment["desc"] = "SEALOC / method: {} / workload: {}".format(method, workload)
-            EXPERIMENT_QUEUE.append(extra_experiment)
+# for method in ("main", "first", "onlystates", "onlyfreq", "random"):
+#     for workload in ("darknet_processed", "sdn_processed", "bsy_processed"):
+#         for i in range(1):
+#             extra_experiment = copy.deepcopy(experiment)
+#             extra_experiment["workload"]["reqs_file"] = "/P3/{}/req_file.csv".format(workload)
+#             extra_experiment["workload"]["content_file"] = "/P3/{}/content_file.csv".format(workload)
+#             extra_experiment["content_placement"]["content_file"] = "/P3/{}/content_file.csv".format(workload)
+#             extra_experiment["strategy"]["method"] = method
+#             extra_experiment["desc"] = "SEALOC / method: {} / workload: {}".format(method, workload)
+#             EXPERIMENT_QUEUE.append(extra_experiment)
 

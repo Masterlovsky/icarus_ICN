@@ -226,8 +226,12 @@ class GlobetraffWorkload:
         self.contents = range(self.n_contents)
         self.request_file = WORKLOAD_RESOURCES_DIR + reqs_file
         self.beta = beta
+        with open(self.request_file) as f:
+            reader = csv.reader(f, delimiter=",")
+            # get line number
+            self.n_lines = sum(1 for _ in reader)
         self.n_warmup = 0 if "n_warmup" not in kwargs else kwargs["n_warmup"]
-        self.n_measured = self.n_contents if "n_measured" not in kwargs else kwargs["n_measured"]
+        self.n_measured = self.n_lines if "n_measured" not in kwargs else kwargs["n_measured"]
         if beta != 0:
             degree = nx.degree(self.topology)
             self.receivers = sorted(

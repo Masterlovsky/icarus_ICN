@@ -615,6 +615,7 @@ class NetworkView:
             used_ts_cp_l = self.model.link_capacity_used[(v, u)]
             index = bisect.bisect_right([ts for ts, _ in used_ts_cp_l], ts)
             used_capacity = sum([cp for _, cp in used_ts_cp_l[:index]])
+        # print("test---------------used_capacity:{}".format(used_capacity))
         return total_cap - used_capacity
 
     def link_loss_rate(self, u, v):
