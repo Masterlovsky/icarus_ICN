@@ -18,7 +18,7 @@ print: check_installed
 	icarus results print $(RESULTS_FILE) > $(PRINT_FILE)
 
 csv: check_installed
-	python3 csvbuilder.py $(RESULTS_FILE) $(CSV_FILE)
+	python3 flows_dumper.py $(RESULTS_FILE) $(CSV_FILE)
 
 flow: check_installed
 	python3 flows_dumper.py $(RESULTS_FILE) $(FLOW_FILE)

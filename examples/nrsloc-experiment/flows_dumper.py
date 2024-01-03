@@ -51,7 +51,40 @@ def dump_flow_data(input_file: str = "results.pickle", output_file: str = "flow_
     print("Max load: {} / min load: {}".format(max_load, min_load))
 
 
+def csv_builder(input_file: str = "results.pickle", output_file: str = "result.csv"):
+    """
+    Build the csv file from the flow data file
+    :param input_file: the input file path
+    :param output_file: the output file path
+    :return: None
+    """
+    # read the flow data file
+    data = read_results_pickle(input_file)
+    # print(data.prettyprint())
+
+    # dump the data to csv file
+    with open(output_file, "w") as f:
+        f.write("mean_internal,mean_external,nsd_internal,nsd_external,avg_source_load,max_source_load,std_source_load\n")
+
+        for i in range(len(data)):
+            mean_internal = data[i][1]["LINK_LOAD"]["MEAN_INTERNAL"]
+            mean_external = data[i][1]["LINK_LOAD"]["MEAN_EXTERNAL"]
+            nsd_internal = data[i][1]["LINK_LOAD"]["NSD_INTERNAL"]
+            nsd_external = data[i][1]["LINK_LOAD"]["NSD_EXTERNAL"]
+            avg_source_load = data[i][1]["SOURCE_LOAD"]["AVG_SOURCE_LOAD"]
+            max_source_load = data[i][1]["SOURCE_LOAD"]["MAX_SOURCE_LOAD"]
+            std_source_load = data[i][1]["SOURCE_LOAD"]["STD_SOURCE_LOAD"]
+            f.write(str(mean_internal) + "," + str(mean_external) + "," + str(nsd_internal) + "," + str(
+                nsd_external) + "," + str(avg_source_load) + "," + str(max_source_load) + "," + str(std_source_load))
+            f.write("\n")
+
+    print("CSV builder, Done!")
+
+
 if __name__ == '__main__':
     input_f, out_f = sys.argv[1], sys.argv[2]
-    dump_flow_data(input_f, out_f)
+    if ".csv" in out_f:
+        csv_builder(input_f, out_f)
+    else:
+        dump_flow_data(input_f, out_f)
     print("Done!")
