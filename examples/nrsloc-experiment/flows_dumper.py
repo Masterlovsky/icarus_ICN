@@ -64,7 +64,8 @@ def csv_builder(input_file: str = "results.pickle", output_file: str = "result.c
 
     # dump the data to csv file
     with open(output_file, "w") as f:
-        f.write("mean_internal,mean_external,nsd_internal,nsd_external,avg_source_load,max_source_load,std_source_load\n")
+        f.write(
+            "method,workload,mean_internal,mean_external,nsd_internal,nsd_external,avg_source_load,max_source_load,std_source_load\n")
 
         for i in range(len(data)):
             mean_internal = data[i][1]["LINK_LOAD"]["MEAN_INTERNAL"]
@@ -74,8 +75,12 @@ def csv_builder(input_file: str = "results.pickle", output_file: str = "result.c
             avg_source_load = data[i][1]["SOURCE_LOAD"]["AVG_SOURCE_LOAD"]
             max_source_load = data[i][1]["SOURCE_LOAD"]["MAX_SOURCE_LOAD"]
             std_source_load = data[i][1]["SOURCE_LOAD"]["STD_SOURCE_LOAD"]
-            f.write(str(mean_internal) + "," + str(mean_external) + "," + str(nsd_internal) + "," + str(
-                nsd_external) + "," + str(avg_source_load) + "," + str(max_source_load) + "," + str(std_source_load))
+            method = data[i][0]["strategy"]["method"]
+            desc = data[i][0]["desc"]
+            workload = desc.split(" / ")[-1].split(": ")[-1]
+            f.write(method + "," + workload + "," + str(mean_internal) + "," + str(mean_external) + "," + str(
+                nsd_internal) + "," + str(nsd_external) + "," + str(avg_source_load) + "," + str(
+                max_source_load) + "," + str(std_source_load))
             f.write("\n")
 
     print("CSV builder, Done!")
