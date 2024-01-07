@@ -385,6 +385,7 @@ class SEALOC(Strategy):
         normalize(link_delays)
         normalize(link_capacities)
         normalize(link_losses)
+        normalize(dst_frequency)
         # calculate the link status
         for loc in locs:
             next_hop_link = loc2hop[loc]

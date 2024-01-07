@@ -82,14 +82,15 @@ EXPERIMENT_QUEUE.append(experiment)
 
 # Copy experiment, change parameters and append to queue
 # --------- experiment 1: different method ---------
-# for method in ("main", "first", "onlystates", "onlyfreq", "random"):
-#     for workload in ("darknet_processed", "sdn_processed", "bsy_processed"):
-#         for i in range(1):
-#             extra_experiment = copy.deepcopy(experiment)
-#             extra_experiment["workload"]["reqs_file"] = "/P3/{}/req_file.csv".format(workload)
-#             extra_experiment["workload"]["content_file"] = "/P3/{}/content_file.csv".format(workload)
-#             extra_experiment["content_placement"]["content_file"] = "/P3/{}/content_file.csv".format(workload)
-#             extra_experiment["strategy"]["method"] = method
-#             extra_experiment["desc"] = "SEALOC / method: {} / workload: {}".format(method, workload)
-#             EXPERIMENT_QUEUE.append(extra_experiment)
+for method in ("main", "first", "onlystates", "onlyfreq", "random"):
+    for workload in ("darknet_processed", "sdn_processed", "bsy_processed"):
+        for seed in range(2024, 2024 + 5):
+            extra_experiment = copy.deepcopy(experiment)
+            extra_experiment["workload"]["reqs_file"] = "/P3/{}/req_file.csv".format(workload)
+            extra_experiment["workload"]["content_file"] = "/P3/{}/content_file.csv".format(workload)
+            extra_experiment["content_placement"]["content_file"] = "/P3/{}/content_file.csv".format(workload)
+            extra_experiment["content_placement"]["seed"] = seed
+            extra_experiment["strategy"]["method"] = method
+            extra_experiment["desc"] = "SEALOC / method: {} / workload: {}".format(method, workload)
+            EXPERIMENT_QUEUE.append(extra_experiment)
 
